@@ -109,8 +109,6 @@
 	- [Other Tools](#other-tools)
 	- [Experimentation](#experimentation)
 		- [Ad Hoc](#ad-hoc)
-- [write: dd if=/dev/zero of=file1 bs=1024k count=1k](#write-dd-ifdevzero-offile1-bs1024k-count1k)
-- [read: dd if=file1 of=/dev/null bs=1024k](#read-dd-iffile1-ofdevnull-bs1024k)
 		- [Micro-Benchmarking Tools](#micro-benchmarking-tools)
 		- [Cache flushing](#cache-flushing)
 	- [Tuning](#tuning)
@@ -1191,8 +1189,8 @@ Tools for actively testing file system performance
 *dd* can test sequential file system performance.
 
 ```
-#write: dd if=/dev/zero of=file1 bs=1024k count=1k
-#read: dd if=file1 of=/dev/null bs=1024k
+write: dd if=/dev/zero of=file1 bs=1024k count=1k
+read: dd if=file1 of=/dev/null bs=1024k
 ```
 
 ### Micro-Benchmarking Tools
