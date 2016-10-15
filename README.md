@@ -1,14 +1,14 @@
 # Application Level
 
-##### **Initialization tax & I/O Size**
+## **Initialization tax & I/O Size**
 Transferring I/O incurs overhead such as: initializing buffers, making a system call, context switching, allocating kernel metadata, checking process privileges & limits, mapping addresses to devices, executing kernel and drive code to delivery I/O and freeing metadata and buffers. This tax occurs for both small and large I/O alike. The more I/O transferred by each I/O, the better. Increasing I/O size can increase performance by minimizing overhead. 1 x 128kb I/O is more efficient than 128 x 1kb I/O. However, there is a down size when the application does not need to read a large I/O size. For example a DB performing 8kb random read may run more slowly with 128kb I/O size, as 120kb will be wasted (introducing I/O latency).
 
 **Summary** :I/O size should match the average request size of the application.
 
-##### Buffering
+## Buffering
  To improve write performance, data may be coalesced in a buffer before being sent to the next level, increasing the I/O size and efficiency of the operation. This may increase write latency also, as the first write to a buffer waits for additional ones before being sent.
 
-##### Concurrency and Parallelism
+## Concurrency and Parallelism
 
 Concurrency is the ability to load and begin executing multiple runnable programs. They do not necessarily execute on-CPU at the same instant. Each of these programs may be an application process. Different functions within an application can be made concurrent (multiprocessing, multithreading). Event-based concurrency uses an event loop in order to service different functions typically with a single thread (Node.js).
 
@@ -16,13 +16,13 @@ Parallelism takes advantage of a multiprocessor system. Applications engaging in
 
 **TODO: Synchronization primitives and hash table of locks**
 
-##### Non-Blocking I/O
+### Non-Blocking I/O
 Normal process operation would have a process block and enter a sleep state during I/O. This negatively affects concurrent I/O (application must make many threads\processes to handle I/O concurrently) along with being inefficient  for frequent short lived I/O (overhead costs). Non-Blocking I/O issues I/O without blocking.
 
-##### Process Binding
+## Process Binding
 Binding a process or thread to a specific CPU. This can improve memory locality of the application, reducing the cycles for memory I/O and improving overall application performance. The OS usually handles this for us. Be careful of this concept in shared cloud server environments (AWS), you may not be the only one binding to a an underlying physical CPU.
 
-##### Thread State Analysis
+## Thread State Analysis
 At a minimum two thread states exist: On-CPU (executing) and Off-CPU (waiting for a turn on-CPU, or for I/O, locks, paging, work, and so on…). If most of the time is spent on-CPU, cpu profiling can be applied. If off-CPU other methodologies must be used. Digging deeper Unix like systems provide six states (these are loosely defined):
 
 1. Executing: on-CPU
@@ -57,16 +57,16 @@ Analyzing these symptoms:
 
 4. Sleeping: Can be determined indirectly with tools such as *pidstat -d * and seeing if the process is performing I/O. If the application is spending a considerable amount of time sleeping due to I/O the tool *pstack *which takes a snapshot of the process's user space stack.
 
-##### Syscall Analysis
+## Syscall Analysis
 
 Studying process execution based on syscall time. We now want to analyze **Executing:** on-CPU (user mode) and **Syscalls:** time during a system call (kernel mode running or waiting). Tools to use for this include *strace, Dtrace, and SystemTap*
 
-##### I/O Profiling
+## I/O Profiling
 *Dtrace* to profile a process’s I/O system calls. These profiles can give you an idea of which functions an application is running take the most time to complete.
 
 # CPU Level
 
-##### Terminology:
+## Terminology:
 
 <table>
   <tr>
@@ -100,7 +100,7 @@ Studying process execution based on syscall time. We now want to analyze **Execu
 </table>
 
 
-##### CPU Architecture:
+## CPU Architecture:
 
 **Physical**
 
@@ -110,18 +110,18 @@ Studying process execution based on syscall time. We now want to analyze **Execu
 
 ![image alt text](image_cpu_logical_topology.png)
 
-##### Utilization
+## Utilization
 CPU utilization is measured by the time a CPU instance is busy performing work during an interval, expressed as a percentage. CPU performance does not degrade under high usage alone. The measure of utilization spans all clock cycles including memory access (High CPU can actually be indication of frequent memory stalls waiting for memory I/O.)
 
-##### User-Time/Kernel-Time
+## User-Time/Kernel-Time
 The CPU time spent executing user-level application code is called user-time, and kernel-level code is kernel-time. Kernel-time includes time during system calls, kernel threads, and interrupts. When measured across the system the user/kernel time ratio indicates the type of workload being performed. Applications that are CPU bound may spend almost all their time executing user-level code and have a user/kernel ratio approaching 99/1. Applications that are I/O-intensive have a high rate of system calls, which execute code to perform the I/O.
 
 **Summary**: CPU-Bound workloads = high user time. I/O bound workloads = high kernel time
 
-##### Saturation
+## Saturation
 A CPU at 100% utilization is saturated and threads will encounter scheduler latency (waiting to run on-CPU).
 
-##### Scheduling classes (threads)
+## Scheduling classes (threads)
 Scheduling classes manage the behavior of runnable threads, specifically their priorities (**nice values**), whether their on-CPU time is time-sliced, and the duration of those time-slices (time quantum). Additional controls are found via **scheduling policies** which may be selected within a scheduling class and can control scheduling between threads of the same priority. In Linux the nice value sets the **static priority** of the thread, which is separate from the dynamic priority that the scheduler calculates.
 
 Linux provides the following Thread scheduler classes:
@@ -146,10 +146,10 @@ Linux provides the following Thread scheduler classes:
 
 RT workloads are of highest priority followed by O(1)/CFS and with Idle trailing last.
 
-##### NUMA Grouping
+## NUMA Grouping
 Performance on NUMA systems can be significantly improved by making the kernel NUMA-aware, so that it can make better scheduling and memory placement decisions. This can automatically detect and create groups of localized CPU and memory resources and organize them in a topology to reflect the NUMA architecture. This topology allows the cost of any memory access to be estimated. On Linux these groupings are called **scheduling domains** which are in a topology beginning with the* root domain.*
 
-##### Tools Methodology
+## Tools Methodology
 This analysis methodology covers the tools that can be used to analyze CPU performance
 
 1. uptime: check load averages to see if CPU load is increasing or decreasing.
@@ -166,7 +166,7 @@ This analysis methodology covers the tools that can be used to analyze CPU perfo
 
 7. perf/cpustat: Measure CPI
 
-##### Tools Rundown for CPU
+## Tools Rundown for CPU
 ```
 vmstat (ran with no flags):
 vmstat's first run will report metrics from system start
@@ -215,31 +215,31 @@ Use pidstat when you want the same information vmstat gives you, but broken down
 ```
 **Summary** When looking for **system wide** CPU information use **_vmstat_***. *When looking for **per virtual core** CPU information use **_mpstat_**. When looking for **per process** CPU information use **_pidstat_**.
 
-##### Tuning
+## Tuning
 
-###### Scheduling Priority and Class
+### Scheduling Priority and Class
 
 *nice* command can be used to adjust process priority. Positive nice values decrease priority, and negative nice values increase priority.
 
 *chrt* command can show and set the scheduling priority directly, and the scheduling policy.
 
-###### Process Binding
+### Process Binding
 
 *taskset* command uses a CPU mask or ranges to set CPU affinity
 
-###### Exclusive CPU sets
+### Exclusive CPU sets
 
 Linux provides *cpusets*, which allow CPUs to be grouped and processes assigned to them. This can improve performance similarly to process binding. But performance can be improved further by making cpuset exclusive -- preventing other processes from using it.
 
 Reference documentation for full details (it’s a pseudo file system that needs to be mounted similar to Cgroups.)
 
-###### Resource Controls
+### Resource Controls
 
 Linux has container groups (Cgroups), which control resource usage by processes or groups of processes. CPU usage can be controlled using shares, and the CFS scheduler allows fixed limits to be imposed (CPU bandwidth), in terms of allocating microseconds of CPU cycles per interval.
 
 # Memory Level
 
-##### Performance factor overview -
+## Performance factor overview -
 
 * Main memory stores application and kernel instructions, their working data, and file system caches. Exhausting this resource leads to the disk subsystem being used in it’s place, which is orders of magnitude slower
 
@@ -251,7 +251,7 @@ Linux has container groups (Cgroups), which control resource usage by processes 
 
 * Memory locality in multi socket architectures (NUMA) (memory attached to local sockets have lower access latency than remote sockets)
 
-##### Terminology
+## Terminology
 
 <table>
   <tr>
@@ -305,14 +305,14 @@ Linux has container groups (Cgroups), which control resource usage by processes 
 </table>
 
 
-##### File system paging
+## File system paging
 File system paging is caused by the reading and writing of pages in memory-mapped files. This is attributed to *mmap()* system calls. When needed, the kernel can free memory by paging some out. This is where the terminology gets a bit tric
 file system page has been modified in main memory ("dirty"), the page-out will require it to be written to disk. If, instead, the file system page has not been modified (“clean”), the page-out merely frees the memory for immediate reuse, since a copy already exists on disk. Because of this, the term page-out means that a page was moved out of memory—this may or may not have included a write to a storage device (you may see this defined differently).
 
-##### Anonymous Paging
+## Anonymous Paging
 Involves data that is private to processes: the process heap and stacks. Anonymous term is used because it has no named location in the operating system (no file system path name). Anonymous paging requires moving the data to the physical swap devices or swap files (swapping). This is considered "bad" paging and hurts performance. Anonymous page-in’s block, anonymous page-outs can be performed asynchronously by the kernel.
 
-##### Demand Paging and Faults
+## Demand Paging and Faults
 maps pages of virtual memory to physical memory on demand. This defers the CPU overhead of creating the mappings until they are actually needed and accessed, instead of at the time a range of memory is first allocated. A page fault occurs as a page is accessed when there is initially no page mapping for virtual to physical memory. If the mapping can be satisfied from another page in memory, it is called a **minor fault**. Page faults that require storage device access such as accessing an uncached memory-mapped file, are called **major faults.** Due to demand allocation any page of virtual memory can be in the following states:
 
 1. Unallocated
@@ -331,17 +331,17 @@ Transition from B to C is a **page fault**. If it requires disk I/O it’s a **m
 
 **Summary:** **File system paging** = paging of known memory-mapped files (files which have a known place on the file system and are identifiable to the OS). **Anonymous Paging** = Paging of a process’s private address space, this is a performance issue! Demand paging = the deferring of virtual to physical memory until necessary. Page faults are the method in which demand paging is implemented. **Minor fault** = When the mapping can happen directly to memory. **Major fault** = when the mapping needs to happen to disk (performance issue!). *RSS* = The size of allocated main memory pages. Virtual memory size = ALL allocated area
 
-##### Overcommit
+## Overcommit
 Allows more memory to be allocated than the system can possibly store -- more than physical memory and swap devices combined. Relies on demand paging and the tendancy of applications to not use much of the memory they have allocated. This is a tunable feature (see tuning section)
 
-##### Swapping
+## Swapping
 
 The movement of an entire process between main memory and the physical swap device or swap file. This is the original Unix technique for managing main memory. This swap includes all private data unless it’s data originating from the file system, in which case the file system is referred to when swapping back into memory. A small amount of process metadata always resides in kernel memory. This is a performance intensive operation.
 
-##### File system Cache Usage
+## File system Cache Usage
 The OS uses available memory to cache the file system, improving performance. Memory used for the file system cache can be thought of us "unused" from a systems resource perspective.
 
-##### Allocators
+## Allocators
 User-land libraries or kernel-based routines, which provide the software programmer with an easy interface for memory usage (malloc(), free()). These can affect performance significantly. There are a variety of user- and kernel-level allocators for memory allocation.
 
   Features:
@@ -360,7 +360,7 @@ User-land libraries or kernel-based routines, which provide the software program
 
   **glibc**
 
-##### Freeing Memory
+## Freeing Memory
 
 Linux has several methods to add pages back to the free list (freeing memory)
 
@@ -368,7 +368,7 @@ Linux has several methods to add pages back to the free list (freeing memory)
 
 *Linux OS pictures on left, Solaris on right*
 
-###### Free List
+### Free List
 A list of pages that are unused (also called idle memory) and available for immediate allocation. This is usually implemented as multiple free page lists, one for each locality group (NUMA)
 
   * Linux uses the buddy allocator for managing pages providing mutiple free lists for different size memory allocations, following a power of two scheme. Buddy refers to finding neighboring pages of free memory so they can be allocated together.
@@ -393,14 +393,14 @@ On Linux, specifically the methods are:
 
 * **OOM Killer**: finds and kills sacrificial processes, found using select_bad_process() and then killed by calling oom_kill_process().  
 
-##### Process Address Space
+## Process Address Space
 range of virtual pages that are mapped to physical pages as needed. Split into areas called **segments** for storing thread stacks, process executable, libraries, and heap.
 
 ![image alt text](image_1.png)
 
 The program executable & Libraries segment contains separate text and data segments (Not pictured above).
 
-###### Segments:
+### Segments:
 
 * **Executable text**: contains the executable CPU instructions for the process. This is mapped from the text segment of the binary program on the file system. It is read-only with the execute permission
 
@@ -410,7 +410,7 @@ The program executable & Libraries segment contains separate text and data segme
 
 * **Stack**: stacks of the running threads, mapped read/write
 
-##### Tools Methodology:
+## Tools Methodology:
 
 * **Page scanning**: Look for continous page scanning (more than 10s) as a sign of memory pressure. *sar -B* and checking the *pgscan* columns.
 
@@ -424,7 +424,7 @@ The program executable & Libraries segment contains separate text and data segme
 
 * **dtrace/stap/perf**: Trace memory allocation with stack traces, to identify the cause of memory usage.
 
-##### Tools Rundown for Memory
+## Tools Rundown for Memory
 ```
 vmstat (ran with 1 second intervals, no flags)
 
@@ -522,17 +522,17 @@ Lists the memory mappings of a process, showing their sizes, permissions, and ma
     7f5739543000 rw-p 0000b000  08:22  6041455      4     4     4          4         4    0      0 libnss_files-2.21.so
 ```
 
-##### Tuning
+## Tuning
 
-###### Kernel Params
+### Kernel Params
 
 ![image alt text](image_2.png)
 
-###### Multiple Page Sizes
+### Multiple Page Sizes
 
 Large page sizes can improve memory I/O performance by improving the hit ratio of the TLB cache (increasing its reach). Enable **Huge Pages** and look into** Transparent Huge Pages (THP)**
 
-###### Resource Controls
+### Resource Controls
 
 Basic resource controls, including setting a main memory limit and a virtual memory limit using *ulimit*. Linux has Cgroups also:
 
@@ -546,7 +546,7 @@ Basic resource controls, including setting a main memory limit and a virtual mem
 
 # File System Level
 
-##### Terminology
+## Terminology
 
 <table>
   <tr>
@@ -592,25 +592,25 @@ Basic resource controls, including setting a main memory limit and a virtual mem
 </table>
 
 
-##### File System Interfaces
+## File System Interfaces
 
 A basic model of a file system in terms of interfaces
 
 ![image alt text](image_3.png)
 
-##### File System Cache
+## File System Cache
 
 A generic file system cache stored in main memory, servicing a read operation
 
 ![image alt text](image_4.png)
 
-##### Concepts
+## Concepts
 
-###### File system latency
+### File system latency
 
 The primary metric of file system performance. The time from a logical file system request to it’s completion. Inclusive of time spent in the file system, kernel disk I/O subsystem, and waiting on disk devices (Physical I/O). Processes often block during I/O requests, making I/O directly proportional to application performance (Unless Non-Blocking I/O techniques are used or when I/O is initiated from an asynchronous thread). Monitoring I/O latency has been historically difficult and focuses on disks performance. Threads doing backround flushes of I/O to disk will look like high bursts of disk I/O latency, however no application is blocked by this. Tracing and profiling are necessary to identify these occurences.
 
-###### Caching
+### Caching
 
 The file system will use main memory (RAM) as a cache to improve performance. Applications logical I/O latency improves (no latency occurs from disk access). Cache memory grows while free memory shrinks as the system remains operation, this is normal and page cache memory can be thought of as "free" however removing pages from the page cache can affect I/O operation latency.
 
@@ -618,7 +618,7 @@ Multiple types of cache are used by the file system and block device subsystem.
 
 ![image alt text](image_5.png)
 
-###### Random vs Sequential I/O
+### Random vs Sequential I/O
 
 A series of logical file system I/O can be described as *random * or *sequential*, based on the file offset of each I/O. Sequential I/O means the next I/O begins at the end of the previous I/O. Random I/O have no apparent relationship between them, and the offset changes randomly.
 
@@ -626,7 +626,7 @@ A series of logical file system I/O can be described as *random * or *sequential
 
 Due to performance characteristics of spinning disks, file systems have historically attempted to reduce random I/O by placing file data on disk sequentially and contiguously. This reduces *fragmentation*.
 
-###### Prefetch (AKA read-ahead)
+### Prefetch (AKA read-ahead)
 
 Some I/O workloads are too large for memory or will most likely be read into cache once and not accessed again (removing it from cache quickly if it's an LRU cache). Prefetch combats this by predicting sequential read workloads based on current and previous file I/O offsets. Prefetch caches additional blocks that is *assumes* the application will be requesting, if the application does request these blocks they will be in cache when it attempts the request. Here’s an example
 
@@ -646,7 +646,7 @@ Some I/O workloads are too large for memory or will most likely be read into cac
 
 Prefetch is a tunable feature
 
-##### Write-Back Caching
+## Write-Back Caching
 
 Treats writes as completed after the transfer to main memory, and writing them to disk happens sometime later, asynchronously. The file system process for writing this "dirty" data to disk is called *flushing.* An example:
 
@@ -660,7 +660,7 @@ Treats writes as completed after the transfer to main memory, and writing them t
 
 The trade-off is reliability. When writes go to memory, if system failure occurs they can be lost. The flush could also happen incompletely leaving behind an on-disk state that is corrupted.
 
-###### Synchronous Writes
+### Synchronous Writes
 
 Kernel does not return execution to application until write has made it all the way to disk. Two forms:
 
@@ -668,19 +668,19 @@ Kernel does not return execution to application until write has made it all the 
 
 * Synchronously Committing Previous Writes - Using fsycn() sys call the application flushes writes to disk synchronously as "check-points" (not a technical term) in their code. This can improve performance by grouping synchronous writes at once.
 
-###### Raw and Direct I/O
+### Raw and Direct I/O
 
-###### Raw I/O
+### Raw I/O
 issued directly to disk offsets, bypassing the file system all together.
 
-###### Direct I/O
+### Direct I/O
 Uses the filesystem but does not utilize the page cache. Mapping of file offsets to disk offsets are still performed by filesystem code and I/O may also be resized to match the size used by the file system for on-disk layout (record size). A good time to use Direct I/O is for large write operations you don’t want to populate your page cache with.
 
-###### Non-Blocking I/O
+### Non-Blocking I/O
 
 Can avoid the performance or resource overhead of thread creation. Using the O_NONBLOCK or O_NDLEY flags to open() syscall opens a file descriptor that will issue non-blocking I/O reads and writes. When reading and writing the appropriate functions will return ‘EAGAIN’ error instead of blocking, allowing your application to try later.
 
-##### Memory-Mapped Files
+## Memory-Mapped Files
 
 Mapping files to the process address space and accessing memory offsets directly. Avoids syscall execution and context switch overheads when calling read() and write(). Can also avoid double copying of data, if the kernel supports direct copying of the file data buffer to the process address space.
 
@@ -688,28 +688,28 @@ Created with mmap() syscall and removed using munmap(). Mappings can be tuned us
 
 Disadvantage of using mapping on multiprocessor systems can be the overhead to keep each CPU MMU in sync, specifically the CPU cross calls to remove mappings (TLB shootdowns). Can be minimized by delaying TLB updates (lazy shootdowns)
 
-###### Metadata
+### Metadata
 
 While data describes the contents of files and directories, metadata describes information about them. May refer to information that can be read from the file system interface (POSIX) or information needed to implement the file system on-disk layout.
 
-###### Logical Metadata
+### Logical Metadata
 Information that is read and written to the filesystem by consumers (applications), either
 
   * Explicitly: reading file statistics (stat()), creating and deleting files (creat(), unlink()) and directories (mkdir(), rmdir())
 
   * Implicitly: file system access timestamp updates, directory modification timestamp updates
 
-###### Physical Metadata
+### Physical Metadata
 
 The on-disk layout metadata necessary to record all file system information. Depends on file system type and can include superblocks, inodes, blocks of data pointers (primary, secondary, …) and free lists.
 
 A workload can be "metadata-heavy" typically refers to logical metadata, for example, web servers that stat() files to ensure they haven’t changed since caching, at a much greater rate than actually reading file data contents.
 
-###### Logical versus Physical I/O
+### Logical versus Physical I/O
 
 I/O requested by applications to the file system (logical I/O) may not match disk I/O (physical I/O) for several resources File systems cache reads, buffer writes, and create additional I/O to maintain the on-disk physical layout metadata needed to record where everything is. This causes unrelated disk I/O (both inflated and deflated) in relation to the original application I/O call. These can be characterized as follows:
 
-###### Unrelated
+### Unrelated
 
   * Other applications: The disk I/O is from another application
 
@@ -717,13 +717,13 @@ I/O requested by applications to the file system (logical I/O) may not match dis
 
   * Other kernel tasks: kernel rebuilding a software RAID coume or performing async file system checksum verification (for example)
 
-###### Indirect:
+### Indirect:
 
   * File system prefetch: adding additional I/O that may not be used by the application
 
   * File system buffering: write-back caching defers and coalesce write for later flushing to disk. May appear as large, infrequent bursts
 
-###### Deflated
+### Deflated
 Where disk I/O is smaller than application I/O or even nonexistent:
 
 * File system caching: satisfying reads from main memory instead of disk
@@ -736,7 +736,7 @@ Where disk I/O is smaller than application I/O or even nonexistent:
 
 * In-memory file system: Content may never be written to disk (tmpfs)
 
-###### Inflated
+### Inflated
 Where disk I/O is larger than application I/O:
 
   * File system metadata: adding additional I/O
@@ -745,7 +745,7 @@ Where disk I/O is larger than application I/O:
 
   * Volume manager parity: read-modify-write cycles, adding additional I/O
 
-###### Example of 1-Byte application write
+### Example of 1-Byte application write
 
 1. An application performs a 1-byte write to an existing file.
 
@@ -769,21 +769,21 @@ Where disk I/O is larger than application I/O:
 
 So while the application performed only a single 1-byte write, the disk performed multiple reads (128 Kbytes in total) and more writes (over 128 Kbytes).
 
-##### File system operation performance
+## File system operation performance
 
 File system operations can exhibit different performance based on their type.
 
-##### Capacity
+## Capacity
 
 When the file system fills, performance may degrade. Writing new data may take more time to locate the free blocks on the disk for computation, and any disk I/O needed. Areas of free space on disk are likely to be smaller and more sparsely located, degrading performance due to smaller I/O and random I/O.
 
-##### Architecture:
+## Architecture:
 
 Generic depiction of file system I/O stack
 
 ![image alt text](image_8.png)
 
-##### VFS:
+## VFS:
 
 The virtual file system provide a common interface for different file system types.
 
@@ -791,7 +791,7 @@ The virtual file system provide a common interface for different file system typ
 
 Linux re uses the terms *inodes* and *superblock* in the VFS domain (which is also present when talking about data’s (and metadata’s) on-disk structures making things slightly confusing. In documentation you’ll see the on disk structures prefixed with the file system name i.e. *ext4_inode* and *ext4_super_block.*
 
-##### File system caches
+## File system caches
 
 ![image alt text](image_10.png)
 
@@ -799,7 +799,7 @@ Linux re uses the terms *inodes* and *superblock* in the VFS domain (which is al
 
 Unix originally had only the buffer cache to improve the performance of block device access. Today Linux have multiple different cache types.
 
-###### Page cache
+### Page cache
 caches virtual memory pages including mapped file system pages. The size is dynamic and will grow to use available memory, freeing it again when applications need it.
 
   * *flush* flusher threads which are created per device to better balance the per-device workload and improve throughput. Pages are flushed to disk for the following reasons:
@@ -812,31 +812,31 @@ caches virtual memory pages including mapped file system pages. The size is dyna
 
       * No available pages in the page cache
 
-###### Dentry Cache
+### Dentry Cache
 Remembers mappings from directory entry (struct dentry) to VFS inode. Improves path name lookup performance (open()). When path name is traversed, each name lookup can check the Dcache for a direct inode mapping, instead of stepping through the directory contents. Size can be seen via /proc. Will shrink via LRU when system needs more memory.
 
   * Negative caching: remembering which lookups lead to non-existent entries. This improves performance of failed lookups, which commonly occur for library path lookup.
 
-###### Inode Cache
+### Inode Cache
 Contains VFS inodes (struct inode), each describing properties of a file system object, many of which are returned via the stat() system call. Inode cache grows dynamically holding at least all inodes mapped by the Dcache. Will shrink with application memory pressure. Size can be seen via /proc
 
-##### File System Features
+## File System Features
 
-###### Block versus Extent
+### Block versus Extent
 
-###### Block-based file systems
+### Block-based file systems
 store data in fixed-size blocks, referenced by pointers stored in metadata blocks. For large files this can require many block pointers and metadata blocks, and the placement of blocks may become scattered, leading to random I/O. Some block-based file-systems attempt to place blocks contiguously to avoid this. Another approach is to use variable block sizes, so that larger sizes can be used as the file grows, which also reduces metadata overhead.
 
-###### Extent-based filesystems
+### Extent-based filesystems
 preallocate contiguous space for files (extents). Growing them as needed. For the cost of space overhead, this improves streaming performance and can improve random I/O performance as file data is localized.
 
-###### Journaling:
+### Journaling:
 
 A *log* recording changes to the file system so that in the event of a system crash, changes can be replayed atomically. Allows file systems to recovery to a consistent state quickly. The journal is written to disk synchronously, and for some file systems it can be configured to use a separate device. Some journals record both data and metadata (I/O written twice, can consume I/O resources) others write only metadata and maintain data integrity by employing copy-on-write.
 
 *Log-structured file system* consists of only a journal where all data and metadata updates are written to a continuous and circular log. Optimizes write performance, as write are always sequential and can be merged to use larger I/O sizes.
 
-###### Copy-on-write:
+### Copy-on-write:
 
 A filesystem that does not overwrite existing blocks but instead follows these steps:
 
@@ -848,27 +848,27 @@ A filesystem that does not overwrite existing blocks but instead follows these s
 
 This helps file system integrity in the event of a system failure and also improves performance by turning random writes into sequential ones.
 
-###### Scrubbing
+### Scrubbing
 
 Asynchronous reads of all data blocks and verifies checksums, to detect failed drivers as early as possible, ideally while the failure is still recoverable due to RAID. Scrubbing negatively affects performance.
 
-###### ToDo: Filesystem types
+### ToDo: Filesystem types
 
-##### Volumes and Pools
+## Volumes and Pools
 
 Allow file systems to be built upon multiple disks and can be configured using different RAID strategies.
 
-###### Volumes
+### Volumes
 present multiple disks as one virtual disk or disk partition (LVM). When built upon whole disks (and not slices or partitions), volumes isolate workloads, reducing performance issues of contention
 
-###### Pooled storage
+### Pooled storage
 multiple disks in a storage pool, from which multiple file systems can be created. Pooled storage is more flexible than volume storage, as file systems can grow and shrink regardless of backing devices. This approach is used by *ZFS* and *btrfs*. Pooled storage can use all disk devices for all file systems, improving performance. Workloads are not isolated; in some cases, multiple pools may be used to separate workloads, given the trade-off of some flexibility, as disk devices must be initially placed in one pool or another.
 
 ![image alt text](image_11.png)
 
 *Illustration of Volume vs pooled storage*
 
-###### Additional performance considerations:
+### Additional performance considerations:
 
 * Stripe width: matching this to the workload
 
@@ -877,3 +877,15 @@ multiple disks in a storage pool, from which multiple file systems can be create
 * CPU overhead: especially when performing RAID parity computation. This has become less of an issue on modern, faster CPUs
 
 * Rebuilding: also called resilvering, this is when an empty disk is added to a RAID group (e.g. replacing a failed disk). Can significantly hurt performance.
+
+## Methodology
+
+### Latency Analysis
+Measuring the latency of all file system operations.(not just I/O).
+
+**operation latency** = time (operation completion) - time (operation request)
+
+**Transaction Cost**: Total time spent waiting for the file system during an application transaction.
+```
+percent time in file system = 100 * total blocking file system latency / application transaction time
+```
