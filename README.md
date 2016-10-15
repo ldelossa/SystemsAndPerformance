@@ -1,3 +1,124 @@
+<!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
+
+- [Application Level](#application-level)
+	- [**Initialization tax & I/O Size**](#initialization-tax-io-size)
+	- [Buffering](#buffering)
+	- [Concurrency and Parallelism](#concurrency-and-parallelism)
+		- [Non-Blocking I/O](#non-blocking-io)
+	- [Process Binding](#process-binding)
+	- [Thread State Analysis](#thread-state-analysis)
+	- [Syscall Analysis](#syscall-analysis)
+	- [I/O Profiling](#io-profiling)
+- [CPU Level](#cpu-level)
+	- [Terminology:](#terminology)
+	- [CPU Architecture:](#cpu-architecture)
+	- [Utilization](#utilization)
+	- [User-Time/Kernel-Time](#user-timekernel-time)
+	- [Saturation](#saturation)
+	- [Scheduling classes (threads)](#scheduling-classes-threads)
+	- [NUMA Grouping](#numa-grouping)
+	- [Tools Methodology](#tools-methodology)
+	- [Tools Rundown for CPU](#tools-rundown-for-cpu)
+	- [Tuning](#tuning)
+		- [Scheduling Priority and Class](#scheduling-priority-and-class)
+		- [Process Binding](#process-binding)
+		- [Exclusive CPU sets](#exclusive-cpu-sets)
+		- [Resource Controls](#resource-controls)
+- [Memory Level](#memory-level)
+	- [Performance factor overview -](#performance-factor-overview-)
+	- [Terminology](#terminology)
+	- [File system paging](#file-system-paging)
+	- [Anonymous Paging](#anonymous-paging)
+	- [Demand Paging and Faults](#demand-paging-and-faults)
+	- [Overcommit](#overcommit)
+	- [Swapping](#swapping)
+	- [File system Cache Usage](#file-system-cache-usage)
+	- [Allocators](#allocators)
+	- [Freeing Memory](#freeing-memory)
+		- [Free List](#free-list)
+	- [Process Address Space](#process-address-space)
+		- [Segments:](#segments)
+	- [Tools Methodology:](#tools-methodology)
+	- [Tools Rundown for Memory](#tools-rundown-for-memory)
+	- [Tuning](#tuning)
+		- [Kernel Params](#kernel-params)
+		- [Multiple Page Sizes](#multiple-page-sizes)
+		- [Resource Controls](#resource-controls)
+- [File System Level](#file-system-level)
+	- [Terminology](#terminology)
+	- [File System Interfaces](#file-system-interfaces)
+	- [File System Cache](#file-system-cache)
+	- [Concepts](#concepts)
+		- [File system latency](#file-system-latency)
+		- [Caching](#caching)
+		- [Random vs Sequential I/O](#random-vs-sequential-io)
+		- [Prefetch (AKA read-ahead)](#prefetch-aka-read-ahead)
+	- [Write-Back Caching](#write-back-caching)
+		- [Synchronous Writes](#synchronous-writes)
+		- [Raw and Direct I/O](#raw-and-direct-io)
+		- [Raw I/O](#raw-io)
+		- [Direct I/O](#direct-io)
+		- [Non-Blocking I/O](#non-blocking-io)
+	- [Memory-Mapped Files](#memory-mapped-files)
+		- [Metadata](#metadata)
+		- [Logical Metadata](#logical-metadata)
+		- [Physical Metadata](#physical-metadata)
+		- [Logical versus Physical I/O](#logical-versus-physical-io)
+		- [Unrelated](#unrelated)
+		- [Indirect:](#indirect)
+		- [Deflated](#deflated)
+		- [Inflated](#inflated)
+		- [Example of 1-Byte application write](#example-of-1-byte-application-write)
+	- [File system operation performance](#file-system-operation-performance)
+	- [Capacity](#capacity)
+	- [Architecture:](#architecture)
+	- [VFS:](#vfs)
+	- [File system caches](#file-system-caches)
+		- [Page cache](#page-cache)
+		- [Dentry Cache](#dentry-cache)
+		- [Inode Cache](#inode-cache)
+	- [File System Features](#file-system-features)
+		- [Block versus Extent](#block-versus-extent)
+			- [Block-based file systems](#block-based-file-systems)
+			- [Extent-based filesystems](#extent-based-filesystems)
+		- [Journaling:](#journaling)
+		- [Copy-on-write:](#copy-on-write)
+		- [Scrubbing](#scrubbing)
+		- [ToDo: Filesystem types](#todo-filesystem-types)
+	- [Volumes and Pools](#volumes-and-pools)
+		- [Volumes](#volumes)
+		- [Pooled storage](#pooled-storage)
+		- [Additional performance considerations:](#additional-performance-considerations)
+	- [Methodology](#methodology)
+		- [Latency Analysis](#latency-analysis)
+			- [operation latency](#operation-latency)
+			- [Transaction Cost](#transaction-cost)
+			- [Workload Characterization](#workload-characterization)
+			- [Advanced Workload Characterization/Checklist](#advanced-workload-characterizationchecklist)
+			- [Performance characteristics](#performance-characteristics)
+			- [Performance Monitoring](#performance-monitoring)
+	- [Tools Rundown for File systems](#tools-rundown-for-file-systems)
+		- [strace](#strace)
+		- [DTrace](#dtrace)
+		- [free](#free)
+		- [top](#top)
+		- [vmstat](#vmstat)
+		- [sar](#sar)
+		- [slabtop](#slabtop)
+		- [/proc/meminfo](#procmeminfo)
+	- [Other Tools](#other-tools)
+	- [Experimentation](#experimentation)
+		- [Ad Hoc](#ad-hoc)
+- [write: dd if=/dev/zero of=file1 bs=1024k count=1k](#write-dd-ifdevzero-offile1-bs1024k-count1k)
+- [read: dd if=file1 of=/dev/null bs=1024k](#read-dd-iffile1-ofdevnull-bs1024k)
+		- [Micro-Benchmarking Tools](#micro-benchmarking-tools)
+		- [Cache flushing](#cache-flushing)
+	- [Tuning](#tuning)
+		- [ext4](#ext4)
+- [Disks Level](#disks-level)
+
+<!-- /TOC -->
+
 # Application Level
 
 ## **Initialization tax & I/O Size**
@@ -824,10 +945,10 @@ Contains VFS inodes (struct inode), each describing properties of a file system 
 
 ### Block versus Extent
 
-### Block-based file systems
+#### Block-based file systems
 store data in fixed-size blocks, referenced by pointers stored in metadata blocks. For large files this can require many block pointers and metadata blocks, and the placement of blocks may become scattered, leading to random I/O. Some block-based file-systems attempt to place blocks contiguously to avoid this. Another approach is to use variable block sizes, so that larger sizes can be used as the file grows, which also reduces metadata overhead.
 
-### Extent-based filesystems
+#### Extent-based filesystems
 preallocate contiguous space for files (extents). Growing them as needed. For the cost of space overhead, this improves streaming performance and can improve random I/O performance as file data is localized.
 
 ### Journaling:
@@ -883,9 +1004,236 @@ multiple disks in a storage pool, from which multiple file systems can be create
 ### Latency Analysis
 Measuring the latency of all file system operations.(not just I/O).
 
-**operation latency** = time (operation completion) - time (operation request)
+#### operation latency
+```
+(operation latency)  = time (operation completion) - time (operation request)
+```
 
-**Transaction Cost**: Total time spent waiting for the file system during an application transaction.
+#### Transaction Cost
+Total time spent waiting for the file system during an application transaction.
 ```
-percent time in file system = 100 * total blocking file system latency / application transaction time
+(percent time in file system) = 100 * (total blocking file system latency) / (application transaction time)
 ```
+
+#### Workload Characterization
+Basic attributes for characterizing the filesystem Workload
+
+* Operation rate and operation types
+
+* File I/O throughput
+
+* File I/O size
+
+* Read/write ratio
+
+* synchronous write ratio
+
+* Random versus sequential file offset access
+
+#### Advanced Workload Characterization/Checklist
+
+* What is the file system cache hit ratio? Miss rate?
+
+* What are the file system cache capacity and current usage?
+
+* What other caches are present (directory, inode, buffer) and what are their stats?
+
+* Which applications or users are using the file system?
+
+* What files and directories are being accessed? Created and deleted?
+
+* Have any errors been encountered? Was this due to invalid requests, or issues fom the file system?
+
+* Why is the file system I/O issued (user-level call path)?
+
+* To what degree is the file system I/O application synchronous?
+
+* What is the distribution of I/O arrival times?
+
+#### Performance characteristics
+
+* What is the average file system operation latency?
+
+* Are there any high-latency outliers?
+
+* What is the full distribution of operation latency?
+
+* Are system resource controls or the file system or disk I/O present and active?
+
+#### Performance Monitoring
+Can identify active issues and patterns of behavior over time. Key metrics are operation rate and operation latency. Both rate and latency may be recorded for each operation type (read, write, stat, open, close, etc..)
+
+## Tools Rundown for File systems
+
+### strace
+system call debuggers
+
+```
+strace timing reads on an ext4 file system
+
+strace -ttT -p 845
+[...]
+18:41:01.513110 read(9, "\334\260/\224\356k..."..., 65536) = 65536 <0.018225>
+18:41:01.531646 read(9, "\371X\265|\244\317..."..., 65536) = 65536 <0.000056>
+18:41:01.531984 read(9, "\357\311\347\1\241..."..., 65536) = 65536 <0.005760>
+18:41:01.538151 read(9, "*\263\264\204|\370..."..., 65536) = 65536 <0.000033>
+18:41:01.538549 read(9, "\205q\327\304f\370..."..., 65536) = 65536 <0.002033>
+18:41:01.540923 read(9, "\6\2738>zw\321\353..."..., 65536) = 65536 <0.000032>
+
+-tt prints relative timestamps (on left)
+-T  prints the syscall times (on right)
+
+Each read() was 64Kb, the first taking 18 ms, followed by 56 μs (likely cached), then 5 ms. The reads were to file descriptor 9.
+```
+
+### DTrace
+dynamic tracing of file system operations, latency
+
+### free
+cache capacity statistics
+```
+free -m
+              total        used        free      shared  buff/cache   available
+Mem:           7863        3786        1892        1164        2184        2583
+Swap:          8070         178        7892
+
+```
+
+### top
+includes memory usage Summary
+```
+Mem: 889484k total, 819056k used, 70428k free, 134024k buffers
+```
+
+### vmstat
+virtual memory statistics
+```
+vmstat 1
+procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+ 0  0 182624 1934532  50588 2200652    0    2    20    97  302  228 10  2 87  1  0
+ 0  0 182624 1927492  50588 2207972    0    0     0     0  198  613  1  0 99  0  0
+ 0  0 182624 1926648  50588 2207972    0    0     0     0  141  655  1  0 98  0  0
+ 0  0 182624 1926808  50588 2207840    0    0     0     0  166  569  1  0 99  0  0
+ 0  0 182624 1926976  50588 2207916    0    0     0     0  250 1646  5  1 94  0  0
+
+buff - buffer cache size (kb)
+cache - page cache size (kb)
+
+```
+
+### sar
+various statistics, including historically
+```
+sar -v 1
+
+dentunusd - directory entry cache unused count (available entries)
+file-nr - number of file handles in use
+inode-nr - number of inodes in use
+
+if ran with -r
+
+kbbuffers - buffer cache size
+kbcached - page cache size
+```
+
+### slabtop
+kernel slab allocator statistics
+```
+slabtop ran with -o flag
+
+Active / Total Objects (% used)    : 604280 / 689287 (87.7%)
+Active / Total Slabs (% used)      : 21103 / 21103 (100.0%)
+Active / Total Caches (% used)     : 75 / 136 (55.1%)
+Active / Total Size (% used)       : 158667.53K / 181759.62K (87.3%)
+Minimum / Average / Maximum Object : 0.01K / 0.26K / 18.50K
+
+ OBJS ACTIVE  USE OBJ SIZE  SLABS OBJ/SLAB CACHE SIZE NAME                   
+147225 113545  77%    0.10K   3775       39     15100K buffer_head            
+115437 115017  99%    0.19K   5497       21     21988K dentry                 
+57510  48769  84%    1.05K   1917       30     61344K ext4_inode_cache       
+53632  44307  82%    0.06K    838       64      3352K kmalloc-64             
+50820  45975  90%    0.20K   2541       20     10164K vm_area_struct         
+33908  26462  78%    0.57K   1211       28     19376K radix_tree_node        
+31348  31348 100%    0.12K    922       34      3688K kernfs_node_cache      
+28390  25916  91%    0.05K    334       85      1336K ftrace_event_field     
+24064  19544  81%    0.03K    188      128       752K kmalloc-32             
+20553  17099  83%    0.08K    403       51      1612K anon_vma               
+17528  16545  94%    0.55K    626       28     10016K inode_cache            
+14382  11141  77%    0.04K    141      102       564K ext4_extent_status     
+14272  12791  89%    0.25K    446       32      3568K kmalloc-256   
+
+Shows sizes of various caches, inode_cache and ext4_inode_cache are present here
+```
+
+### /proc/meminfo
+kernel memory breakdowns
+```
+cat /proc/meminfo
+MemTotal:        8052020 kB
+MemFree:         1702392 kB
+MemAvailable:    2456420 kB
+Buffers:           54048 kB
+Cached:          2053356 kB
+SwapCached:        10344 kB
+```
+
+## Other Tools
+
+**df** : report file system usage and capacity
+**mount** : can show file system mounted options
+**inotify**: a Linux framework for monitoring file system Event-based
+
+## Experimentation
+Tools for actively testing file system performance
+
+### Ad Hoc
+*dd* can test sequential file system performance.
+
+```
+#write: dd if=/dev/zero of=file1 bs=1024k count=1k
+#read: dd if=file1 of=/dev/null bs=1024k
+```
+
+### Micro-Benchmarking Tools
+
+* Bonnie, Bonnie++
+
+* Flexible IO Tester (fio)
+
+* FileBench
+
+### Cache flushing
+Clearing various caches before benchmarking
+
+```
+To free pagecache:
+  echo 1 > /proc/sys/vm/drop_caches
+To free dentries and inodes:
+  echo 2 > /proc/sys/vm/drop_caches
+To free pagecache, dentries and inodes:
+  echo 3 > /proc/sys/vm/drop_caches
+```
+
+## Tuning
+
+### ext4
+
+**tune2fs**: can be used to tune filesystem settings
+**mount**: can be used to adjust file system configuration
+
+**noatime option**: filesystem option for disabling file access timestamp updates, reducing back-end I/O, improving overall performance.
+
+```
+tune2fs -O dir_index /dev/{dev}
+
+Uses hashed B-trees to speed up lookups in large directories
+```
+
+```
+e2fsck -D -f /dev/{dev}
+
+Used to reindex directories in a file system.
+```
+
+# Disks Level
