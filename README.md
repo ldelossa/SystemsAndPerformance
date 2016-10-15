@@ -46,74 +46,81 @@
 		- [Resource Controls](#resource-controls)
 - [File System Level](#file-system-level)
 	- [Terminology](#terminology)
-	- [File System Interfaces](#file-system-interfaces)
-	- [File System Cache](#file-system-cache)
-	- [Concepts](#concepts)
-		- [File system latency](#file-system-latency)
-		- [Caching](#caching)
-		- [Random vs Sequential I/O](#random-vs-sequential-io)
-		- [Prefetch (AKA read-ahead)](#prefetch-aka-read-ahead)
-	- [Write-Back Caching](#write-back-caching)
-		- [Synchronous Writes](#synchronous-writes)
-		- [Raw and Direct I/O](#raw-and-direct-io)
-		- [Raw I/O](#raw-io)
-		- [Direct I/O](#direct-io)
-		- [Non-Blocking I/O](#non-blocking-io)
-	- [Memory-Mapped Files](#memory-mapped-files)
-		- [Metadata](#metadata)
-		- [Logical Metadata](#logical-metadata)
-		- [Physical Metadata](#physical-metadata)
-		- [Logical versus Physical I/O](#logical-versus-physical-io)
-		- [Unrelated](#unrelated)
-		- [Indirect:](#indirect)
-		- [Deflated](#deflated)
-		- [Inflated](#inflated)
-		- [Example of 1-Byte application write](#example-of-1-byte-application-write)
-	- [File system operation performance](#file-system-operation-performance)
-	- [Capacity](#capacity)
-	- [Architecture:](#architecture)
-	- [VFS:](#vfs)
-	- [File system caches](#file-system-caches)
-		- [Page cache](#page-cache)
-		- [Dentry Cache](#dentry-cache)
-		- [Inode Cache](#inode-cache)
-	- [File System Features](#file-system-features)
-		- [Block versus Extent](#block-versus-extent)
-			- [Block-based file systems](#block-based-file-systems)
-			- [Extent-based filesystems](#extent-based-filesystems)
-		- [Journaling:](#journaling)
-		- [Copy-on-write:](#copy-on-write)
-		- [Scrubbing](#scrubbing)
-		- [ToDo: Filesystem types](#todo-filesystem-types)
-	- [Volumes and Pools](#volumes-and-pools)
-		- [Volumes](#volumes)
-		- [Pooled storage](#pooled-storage)
-		- [Additional performance considerations:](#additional-performance-considerations)
-	- [Methodology](#methodology)
-		- [Latency Analysis](#latency-analysis)
+	- [file system interfaces](#file-system-interfaces)
+	- [file system cache](#file-system-cache)
+	- [concepts](#concepts)
+		- [file system latency](#file-system-latency)
+		- [caching](#caching)
+		- [random vs sequential i/o](#random-vs-sequential-io)
+		- [prefetch (aka read-ahead)](#prefetch-aka-read-ahead)
+	- [write-back caching](#write-back-caching)
+		- [synchronous writes](#synchronous-writes)
+		- [raw and direct i/o](#raw-and-direct-io)
+		- [raw i/o](#raw-io)
+		- [direct i/o](#direct-io)
+		- [non-blocking i/o](#non-blocking-io)
+	- [memory-mapped files](#memory-mapped-files)
+		- [metadata](#metadata)
+		- [logical metadata](#logical-metadata)
+		- [physical metadata](#physical-metadata)
+		- [logical versus physical i/o](#logical-versus-physical-io)
+		- [unrelated](#unrelated)
+		- [indirect:](#indirect)
+		- [deflated](#deflated)
+		- [inflated](#inflated)
+		- [example of 1-byte application write](#example-of-1-byte-application-write)
+	- [file system operation performance](#file-system-operation-performance)
+	- [capacity](#capacity)
+	- [architecture:](#architecture)
+	- [vfs:](#vfs)
+	- [file system caches](#file-system-caches)
+		- [page cache](#page-cache)
+		- [dentry cache](#dentry-cache)
+		- [inode cache](#inode-cache)
+	- [file system features](#file-system-features)
+		- [block versus extent](#block-versus-extent)
+			- [block-based file systems](#block-based-file-systems)
+			- [extent-based filesystems](#extent-based-filesystems)
+		- [journaling:](#journaling)
+		- [copy-on-write:](#copy-on-write)
+		- [scrubbing](#scrubbing)
+		- [todo: filesystem types](#todo-filesystem-types)
+	- [volumes and pools](#volumes-and-pools)
+		- [volumes](#volumes)
+		- [pooled storage](#pooled-storage)
+		- [additional performance considerations:](#additional-performance-considerations)
+	- [methodology](#methodology)
+		- [latency analysis](#latency-analysis)
 			- [operation latency](#operation-latency)
-			- [Transaction Cost](#transaction-cost)
-			- [Workload Characterization](#workload-characterization)
-			- [Advanced Workload Characterization/Checklist](#advanced-workload-characterizationchecklist)
-			- [Performance characteristics](#performance-characteristics)
-			- [Performance Monitoring](#performance-monitoring)
-	- [Tools Rundown for File systems](#tools-rundown-for-file-systems)
+			- [transaction cost](#transaction-cost)
+			- [workload characterization](#workload-characterization)
+			- [advanced workload characterization/checklist](#advanced-workload-characterizationchecklist)
+			- [performance characteristics](#performance-characteristics)
+			- [performance monitoring](#performance-monitoring)
+	- [tools rundown for file systems](#tools-rundown-for-file-systems)
 		- [strace](#strace)
-		- [DTrace](#dtrace)
+		- [dtrace](#dtrace)
 		- [free](#free)
 		- [top](#top)
 		- [vmstat](#vmstat)
 		- [sar](#sar)
 		- [slabtop](#slabtop)
 		- [/proc/meminfo](#procmeminfo)
-	- [Other Tools](#other-tools)
-	- [Experimentation](#experimentation)
-		- [Ad Hoc](#ad-hoc)
-		- [Micro-Benchmarking Tools](#micro-benchmarking-tools)
-		- [Cache flushing](#cache-flushing)
-	- [Tuning](#tuning)
+	- [other tools](#other-tools)
+	- [experimentation](#experimentation)
+		- [ad hoc](#ad-hoc)
+		- [micro-benchmarking tools](#micro-benchmarking-tools)
+		- [cache flushing](#cache-flushing)
+	- [tuning](#tuning)
 		- [ext4](#ext4)
-- [Disks Level](#disks-level)
+- [disks level](#disks-level)
+	- [terminology](#terminology)
+	- [Models](#models)
+		- [Simple disk](#simple-disk)
+		- [Caching disk](#caching-disk)
+		- [Controller](#controller)
+	- [Concepts](#concepts)
+		- [Measuring Time](#measuring-time)
 
 <!-- /TOC -->
 
@@ -669,399 +676,387 @@ Basic resource controls, including setting a main memory limit and a virtual mem
 
 <table>
   <tr>
-    <td>File system</td>
-    <td>An organization of data as files and directories, with a file-based interface for accessing them, and file permissions to control access. Additional content may include special file types for devices, sockets, and pipes and metadata including file access timestamps</td>
+    <td>file system</td>
+    <td>an organization of data as files and directories, with a file-based interface for accessing them, and file permissions to control access. additional content may include special file types for devices, sockets, and pipes and metadata including file access timestamps</td>
   </tr>
   <tr>
-    <td>File system cache</td>
-    <td>An area of main memory (usually DRAM) used to cache file system contents, which may include different caches for various data and metadata</td>
+    <td>file system cache</td>
+    <td>an area of main memory (usually dram) used to cache file system contents, which may include different caches for various data and metadata</td>
   </tr>
   <tr>
-    <td>Operations</td>
-    <td>The requests of the file system, including read(), write(). open(), close(), stat(). mkdir() and other operations</td>
+    <td>operations</td>
+    <td>the requests of the file system, including read(), write(). open(), close(), stat(). mkdir() and other operations</td>
   </tr>
   <tr>
-    <td>I/O</td>
-    <td>input/output. File system I/O can be defined in several ways; her it is used to mean only operations that directly read and write (performing I/O) including read(), write(), stat()(read statistics), and mkdir() (write a new directory). I/O does not include open() and close()</td>
+    <td>i/o</td>
+    <td>input/output. file system i/o can be defined in several ways; her it is used to mean only operations that directly read and write (performing i/o) including read(), write(), stat()(read statistics), and mkdir() (write a new directory). i/o does not include open() and close()</td>
   </tr>
   <tr>
-    <td>Logical I/O</td>
-    <td>I/O issues by the application to the file system</td>
+    <td>logical i/o</td>
+    <td>i/o issues by the application to the file system</td>
   </tr>
   <tr>
-    <td>Physical I/O</td>
-    <td>I/O issued directly to the disks by the file system (or via raw I/O)</td>
+    <td>physical i/o</td>
+    <td>i/o issued directly to the disks by the file system (or via raw i/o)</td>
   </tr>
   <tr>
-    <td>Throughput</td>
-    <td>The current data transfer rate between applications and the file system, measured in bytes per second</td>
+    <td>throughput</td>
+    <td>the current data transfer rate between applications and the file system, measured in bytes per second</td>
   </tr>
   <tr>
     <td>inode</td>
-    <td>Data structure containing metadata for a file system object, including permissions, timestamps, and data pointers</td>
+    <td>data structure containing metadata for a file system object, including permissions, timestamps, and data pointers</td>
   </tr>
   <tr>
-    <td>VFS</td>
-    <td>Virtual file system, a kernel interface to abstract and support different file system types. </td>
+    <td>vfs</td>
+    <td>virtual file system, a kernel interface to abstract and support different file system types. </td>
   </tr>
   <tr>
-    <td>Volume manager</td>
-    <td>Software for managing physical storage devices in a flexible way, creating virtual volumes from them for use by the OS.</td>
+    <td>volume manager</td>
+    <td>software for managing physical storage devices in a flexible way, creating virtual volumes from them for use by the os.</td>
   </tr>
 </table>
 
 
-## File System Interfaces
+## file system interfaces
 
-A basic model of a file system in terms of interfaces
+a basic model of a file system in terms of interfaces
 
 ![image alt text](image_3.png)
 
-## File System Cache
+## file system cache
 
-A generic file system cache stored in main memory, servicing a read operation
+a generic file system cache stored in main memory, servicing a read operation
 
 ![image alt text](image_4.png)
 
-## Concepts
+## concepts
 
-### File system latency
+### file system latency
 
-The primary metric of file system performance. The time from a logical file system request to it’s completion. Inclusive of time spent in the file system, kernel disk I/O subsystem, and waiting on disk devices (Physical I/O). Processes often block during I/O requests, making I/O directly proportional to application performance (Unless Non-Blocking I/O techniques are used or when I/O is initiated from an asynchronous thread). Monitoring I/O latency has been historically difficult and focuses on disks performance. Threads doing backround flushes of I/O to disk will look like high bursts of disk I/O latency, however no application is blocked by this. Tracing and profiling are necessary to identify these occurences.
+the primary metric of file system performance. the time from a logical file system request to it’s completion. inclusive of time spent in the file system, kernel disk i/o subsystem, and waiting on disk devices (physical i/o). processes often block during i/o requests, making i/o directly proportional to application performance (unless non-blocking i/o techniques are used or when i/o is initiated from an asynchronous thread). monitoring i/o latency has been historically difficult and focuses on disks performance. threads doing backround flushes of i/o to disk will look like high bursts of disk i/o latency, however no application is blocked by this. tracing and profiling are necessary to identify these occurences.
 
-### Caching
+### caching
 
-The file system will use main memory (RAM) as a cache to improve performance. Applications logical I/O latency improves (no latency occurs from disk access). Cache memory grows while free memory shrinks as the system remains operation, this is normal and page cache memory can be thought of as "free" however removing pages from the page cache can affect I/O operation latency.
+the file system will use main memory (ram) as a cache to improve performance. applications logical i/o latency improves (no latency occurs from disk access). cache memory grows while free memory shrinks as the system remains operation, this is normal and page cache memory can be thought of as "free" however removing pages from the page cache can affect i/o operation latency.
 
-Multiple types of cache are used by the file system and block device subsystem.
+multiple types of cache are used by the file system and block device subsystem.
 
 ![image alt text](image_5.png)
 
-### Random vs Sequential I/O
+### random vs sequential i/o
 
-A series of logical file system I/O can be described as *random * or *sequential*, based on the file offset of each I/O. Sequential I/O means the next I/O begins at the end of the previous I/O. Random I/O have no apparent relationship between them, and the offset changes randomly.
+a series of logical file system i/o can be described as *random * or *sequential*, based on the file offset of each i/o. sequential i/o means the next i/o begins at the end of the previous i/o. random i/o have no apparent relationship between them, and the offset changes randomly.
 
 ![image alt text](image_6.png)
 
-Due to performance characteristics of spinning disks, file systems have historically attempted to reduce random I/O by placing file data on disk sequentially and contiguously. This reduces *fragmentation*.
+due to performance characteristics of spinning disks, file systems have historically attempted to reduce random i/o by placing file data on disk sequentially and contiguously. this reduces *fragmentation*.
 
-### Prefetch (AKA read-ahead)
+### prefetch (aka read-ahead)
 
-Some I/O workloads are too large for memory or will most likely be read into cache once and not accessed again (removing it from cache quickly if it's an LRU cache). Prefetch combats this by predicting sequential read workloads based on current and previous file I/O offsets. Prefetch caches additional blocks that is *assumes* the application will be requesting, if the application does request these blocks they will be in cache when it attempts the request. Here’s an example
+some i/o workloads are too large for memory or will most likely be read into cache once and not accessed again (removing it from cache quickly if it's an lru cache). prefetch combats this by predicting sequential read workloads based on current and previous file i/o offsets. prefetch caches additional blocks that is *assumes* the application will be requesting, if the application does request these blocks they will be in cache when it attempts the request. here’s an example
 
-1. An application issues a file read(), passing execution to the kernel
+1. an application issues a file read(), passing execution to the kernel
 
-2. The file system issues the read from disk
+2. the file system issues the read from disk
 
-3. The previous file offset pointer is compared to the current location, and if they are sequential, the file system issues additional reads
+3. the previous file offset pointer is compared to the current location, and if they are sequential, the file system issues additional reads
 
-4. The first read completes, and the kernel passes the data and execution back to the application
+4. the first read completes, and the kernel passes the data and execution back to the application
 
-5. Any additional reads complete, populating the cache for future application reads.
+5. any additional reads complete, populating the cache for future application reads.
 
 ![image alt text](image_7.png)
 
  *application reads to offset 1 and then 2 tigger prefetch for the next 3 offsets*
 
-Prefetch is a tunable feature
+prefetch is a tunable feature
 
-## Write-Back Caching
+## write-back caching
 
-Treats writes as completed after the transfer to main memory, and writing them to disk happens sometime later, asynchronously. The file system process for writing this "dirty" data to disk is called *flushing.* An example:
+treats writes as completed after the transfer to main memory, and writing them to disk happens sometime later, asynchronously. the file system process for writing this "dirty" data to disk is called *flushing.* an example:
 
-1. An application issues a file write(), passing execution to the kernel.
+1. an application issues a file write(), passing execution to the kernel.
 
-2. Data from the application address space is copied into the kernel
+2. data from the application address space is copied into the kernel
 
-3. The kernel treats the write() syscall as completed, passing execution back to the application
+3. the kernel treats the write() syscall as completed, passing execution back to the application
 
-4. Sometime later, an asynchronous kernel task finds the written data and issues disk writes.
+4. sometime later, an asynchronous kernel task finds the written data and issues disk writes.
 
-The trade-off is reliability. When writes go to memory, if system failure occurs they can be lost. The flush could also happen incompletely leaving behind an on-disk state that is corrupted.
+the trade-off is reliability. when writes go to memory, if system failure occurs they can be lost. the flush could also happen incompletely leaving behind an on-disk state that is corrupted.
 
-### Synchronous Writes
+### synchronous writes
 
-Kernel does not return execution to application until write has made it all the way to disk. Two forms:
+kernel does not return execution to application until write has made it all the way to disk. two forms:
 
-* Individual Synchronous Writes - Write I/O is synchronous when a file is opened using the flag O_SYNC or one of the variants O_DSYNC and O_RSYNC. Some filesystems have mount options to force all write I/O to all files to be synchronous.
+* individual synchronous writes - write i/o is synchronous when a file is opened using the flag o_sync or one of the variants o_dsync and o_rsync. some filesystems have mount options to force all write i/o to all files to be synchronous.
 
-* Synchronously Committing Previous Writes - Using fsycn() sys call the application flushes writes to disk synchronously as "check-points" (not a technical term) in their code. This can improve performance by grouping synchronous writes at once.
+* synchronously committing previous writes - using fsycn() sys call the application flushes writes to disk synchronously as "check-points" (not a technical term) in their code. this can improve performance by grouping synchronous writes at once.
 
-### Raw and Direct I/O
+### raw and direct i/o
 
-### Raw I/O
+### raw i/o
 issued directly to disk offsets, bypassing the file system all together.
 
-### Direct I/O
-Uses the filesystem but does not utilize the page cache. Mapping of file offsets to disk offsets are still performed by filesystem code and I/O may also be resized to match the size used by the file system for on-disk layout (record size). A good time to use Direct I/O is for large write operations you don’t want to populate your page cache with.
+### direct i/o
+uses the filesystem but does not utilize the page cache. mapping of file offsets to disk offsets are still performed by filesystem code and i/o may also be resized to match the size used by the file system for on-disk layout (record size). a good time to use direct i/o is for large write operations you don’t want to populate your page cache with.
 
-### Non-Blocking I/O
+### non-blocking i/o
 
-Can avoid the performance or resource overhead of thread creation. Using the O_NONBLOCK or O_NDLEY flags to open() syscall opens a file descriptor that will issue non-blocking I/O reads and writes. When reading and writing the appropriate functions will return ‘EAGAIN’ error instead of blocking, allowing your application to try later.
+can avoid the performance or resource overhead of thread creation. using the o_nonblock or o_ndley flags to open() syscall opens a file descriptor that will issue non-blocking i/o reads and writes. when reading and writing the appropriate functions will return ‘eagain’ error instead of blocking, allowing your application to try later.
 
-## Memory-Mapped Files
+## memory-mapped files
 
-Mapping files to the process address space and accessing memory offsets directly. Avoids syscall execution and context switch overheads when calling read() and write(). Can also avoid double copying of data, if the kernel supports direct copying of the file data buffer to the process address space.
+mapping files to the process address space and accessing memory offsets directly. avoids syscall execution and context switch overheads when calling read() and write(). can also avoid double copying of data, if the kernel supports direct copying of the file data buffer to the process address space.
 
-Created with mmap() syscall and removed using munmap(). Mappings can be tuned using madvice().
+created with mmap() syscall and removed using munmap(). mappings can be tuned using madvice().
 
-Disadvantage of using mapping on multiprocessor systems can be the overhead to keep each CPU MMU in sync, specifically the CPU cross calls to remove mappings (TLB shootdowns). Can be minimized by delaying TLB updates (lazy shootdowns)
+disadvantage of using mapping on multiprocessor systems can be the overhead to keep each cpu mmu in sync, specifically the cpu cross calls to remove mappings (tlb shootdowns). can be minimized by delaying tlb updates (lazy shootdowns)
 
-### Metadata
+### metadata
 
-While data describes the contents of files and directories, metadata describes information about them. May refer to information that can be read from the file system interface (POSIX) or information needed to implement the file system on-disk layout.
+while data describes the contents of files and directories, metadata describes information about them. may refer to information that can be read from the file system interface (posix) or information needed to implement the file system on-disk layout.
 
-### Logical Metadata
-Information that is read and written to the filesystem by consumers (applications), either
+### logical metadata
+information that is read and written to the filesystem by consumers (applications), either
 
-  * Explicitly: reading file statistics (stat()), creating and deleting files (creat(), unlink()) and directories (mkdir(), rmdir())
+  * explicitly: reading file statistics (stat()), creating and deleting files (creat(), unlink()) and directories (mkdir(), rmdir())
 
-  * Implicitly: file system access timestamp updates, directory modification timestamp updates
+  * implicitly: file system access timestamp updates, directory modification timestamp updates
 
-### Physical Metadata
+### physical metadata
 
-The on-disk layout metadata necessary to record all file system information. Depends on file system type and can include superblocks, inodes, blocks of data pointers (primary, secondary, …) and free lists.
+the on-disk layout metadata necessary to record all file system information. depends on file system type and can include superblocks, inodes, blocks of data pointers (primary, secondary, …) and free lists.
 
-A workload can be "metadata-heavy" typically refers to logical metadata, for example, web servers that stat() files to ensure they haven’t changed since caching, at a much greater rate than actually reading file data contents.
+a workload can be "metadata-heavy" typically refers to logical metadata, for example, web servers that stat() files to ensure they haven’t changed since caching, at a much greater rate than actually reading file data contents.
 
-### Logical versus Physical I/O
+### logical versus physical i/o
 
-I/O requested by applications to the file system (logical I/O) may not match disk I/O (physical I/O) for several resources File systems cache reads, buffer writes, and create additional I/O to maintain the on-disk physical layout metadata needed to record where everything is. This causes unrelated disk I/O (both inflated and deflated) in relation to the original application I/O call. These can be characterized as follows:
+i/o requested by applications to the file system (logical i/o) may not match disk i/o (physical i/o) for several resources file systems cache reads, buffer writes, and create additional i/o to maintain the on-disk physical layout metadata needed to record where everything is. this causes unrelated disk i/o (both inflated and deflated) in relation to the original application i/o call. these can be characterized as follows:
 
-### Unrelated
+### unrelated
 
-  * Other applications: The disk I/O is from another application
+  * other applications: the disk i/o is from another application
 
-  * Other tenants: The disk I/O is from another tenant (Virtualization)
+  * other tenants: the disk i/o is from another tenant (virtualization)
 
-  * Other kernel tasks: kernel rebuilding a software RAID coume or performing async file system checksum verification (for example)
+  * other kernel tasks: kernel rebuilding a software raid coume or performing async file system checksum verification (for example)
 
-### Indirect:
+### indirect:
 
-  * File system prefetch: adding additional I/O that may not be used by the application
+  * file system prefetch: adding additional i/o that may not be used by the application
 
-  * File system buffering: write-back caching defers and coalesce write for later flushing to disk. May appear as large, infrequent bursts
+  * file system buffering: write-back caching defers and coalesce write for later flushing to disk. may appear as large, infrequent bursts
 
-### Deflated
-Where disk I/O is smaller than application I/O or even nonexistent:
+### deflated
+where disk i/o is smaller than application i/o or even nonexistent:
 
-* File system caching: satisfying reads from main memory instead of disk
+* file system caching: satisfying reads from main memory instead of disk
 
-* File system write cancellation: The same byte offsets are modified multiple times before flushed once to disk.
+* file system write cancellation: the same byte offsets are modified multiple times before flushed once to disk.
 
-* Compression: reducing the data volume from logical to physical I/O
+* compression: reducing the data volume from logical to physical i/o
 
-* Coalescing: merging sequential I/O before issuing them to disk.
+* coalescing: merging sequential i/o before issuing them to disk.
 
-* In-memory file system: Content may never be written to disk (tmpfs)
+* in-memory file system: content may never be written to disk (tmpfs)
 
-### Inflated
-Where disk I/O is larger than application I/O:
+### inflated
+where disk i/o is larger than application i/o:
 
-  * File system metadata: adding additional I/O
+  * file system metadata: adding additional i/o
 
-  * File system record size: rounding up I/O size (inflating bytes), or fragmenting I/O (inflating count)
+  * file system record size: rounding up i/o size (inflating bytes), or fragmenting i/o (inflating count)
 
-  * Volume manager parity: read-modify-write cycles, adding additional I/O
+  * volume manager parity: read-modify-write cycles, adding additional i/o
 
-### Example of 1-Byte application write
+### example of 1-byte application write
 
-1. An application performs a 1-byte write to an existing file.
+1. an application performs a 1-byte write to an existing file.
 
-2. The file system identifies the location as part of a 128 Kbyte file system record, which is not cached (but the metadata to reference it is)
+2. the file system identifies the location as part of a 128 kbyte file system record, which is not cached (but the metadata to reference it is)
 
-3. The file system requests that the record be loaded from disk
+3. the file system requests that the record be loaded from disk
 
-4. The disk device layer breaks the 128 Kbyte read into smaller reads suitable for the device
+4. the disk device layer breaks the 128 kbyte read into smaller reads suitable for the device
 
-5. The disks perform multiple smaller reads, totalling 128 Kbytes.
+5. the disks perform multiple smaller reads, totalling 128 kbytes.
 
-6. The file system now replaces the 1 byte in the record with the new byte.
+6. the file system now replaces the 1 byte in the record with the new byte.
 
-7. Sometime later, the file system requests that the 128 Kbyte dirty record be written back to disk
+7. sometime later, the file system requests that the 128 kbyte dirty record be written back to disk
 
-8. The disks write the 128 Kbyte record (broken up if needed)
+8. the disks write the 128 kbyte record (broken up if needed)
 
-9. The file system writes new metadata, for example, references (for copy-on-write) or access time.
+9. the file system writes new metadata, for example, references (for copy-on-write) or access time.
 
-10. The disk performs more writes
+10. the disk performs more writes
 
-So while the application performed only a single 1-byte write, the disk performed multiple reads (128 Kbytes in total) and more writes (over 128 Kbytes).
+so while the application performed only a single 1-byte write, the disk performed multiple reads (128 kbytes in total) and more writes (over 128 kbytes).
 
-## File system operation performance
+## file system operation performance
 
-File system operations can exhibit different performance based on their type.
+file system operations can exhibit different performance based on their type.
 
-## Capacity
+## capacity
 
-When the file system fills, performance may degrade. Writing new data may take more time to locate the free blocks on the disk for computation, and any disk I/O needed. Areas of free space on disk are likely to be smaller and more sparsely located, degrading performance due to smaller I/O and random I/O.
+when the file system fills, performance may degrade. writing new data may take more time to locate the free blocks on the disk for computation, and any disk i/o needed. areas of free space on disk are likely to be smaller and more sparsely located, degrading performance due to smaller i/o and random i/o.
 
-## Architecture:
+## architecture:
 
-Generic depiction of file system I/O stack
+generic depiction of file system i/o stack
 
 ![image alt text](image_8.png)
 
-## VFS:
+## vfs:
 
-The virtual file system provide a common interface for different file system types.
+the virtual file system provide a common interface for different file system types.
 
 ![image alt text](image_9.png)
 
-Linux re uses the terms *inodes* and *superblock* in the VFS domain (which is also present when talking about data’s (and metadata’s) on-disk structures making things slightly confusing. In documentation you’ll see the on disk structures prefixed with the file system name i.e. *ext4_inode* and *ext4_super_block.*
+linux re uses the terms *inodes* and *superblock* in the vfs domain (which is also present when talking about data’s (and metadata’s) on-disk structures making things slightly confusing. in documentation you’ll see the on disk structures prefixed with the file system name i.e. *ext4_inode* and *ext4_super_block.*
 
-## File system caches
+## file system caches
 
 ![image alt text](image_10.png)
 
-*Overview of file system caches in linux*
+*overview of file system caches in linux*
 
-Unix originally had only the buffer cache to improve the performance of block device access. Today Linux have multiple different cache types.
+unix originally had only the buffer cache to improve the performance of block device access. today linux have multiple different cache types.
 
-### Page cache
-caches virtual memory pages including mapped file system pages. The size is dynamic and will grow to use available memory, freeing it again when applications need it.
+### page cache
+caches virtual memory pages including mapped file system pages. the size is dynamic and will grow to use available memory, freeing it again when applications need it.
 
-  * *flush* flusher threads which are created per device to better balance the per-device workload and improve throughput. Pages are flushed to disk for the following reasons:
+  * *flush* flusher threads which are created per device to better balance the per-device workload and improve throughput. pages are flushed to disk for the following reasons:
 
-      * After an interval (30 s)
+      * after an interval (30 s)
 
-      * The sync(), fsync(), or msync() system calls
+      * the sync(), fsync(), or msync() system calls
 
-      * Too many dirty pages (dirty_ratio)
+      * too many dirty pages (dirty_ratio)
 
-      * No available pages in the page cache
+      * no available pages in the page cache
 
-### Dentry Cache
-Remembers mappings from directory entry (struct dentry) to VFS inode. Improves path name lookup performance (open()). When path name is traversed, each name lookup can check the Dcache for a direct inode mapping, instead of stepping through the directory contents. Size can be seen via /proc. Will shrink via LRU when system needs more memory.
+### dentry cache
+remembers mappings from directory entry (struct dentry) to vfs inode. improves path name lookup performance (open()). when path name is traversed, each name lookup can check the dcache for a direct inode mapping, instead of stepping through the directory contents. size can be seen via /proc. will shrink via lru when system needs more memory.
 
-  * Negative caching: remembering which lookups lead to non-existent entries. This improves performance of failed lookups, which commonly occur for library path lookup.
+  * negative caching: remembering which lookups lead to non-existent entries. this improves performance of failed lookups, which commonly occur for library path lookup.
 
-### Inode Cache
-Contains VFS inodes (struct inode), each describing properties of a file system object, many of which are returned via the stat() system call. Inode cache grows dynamically holding at least all inodes mapped by the Dcache. Will shrink with application memory pressure. Size can be seen via /proc
+### inode cache
+contains vfs inodes (struct inode), each describing properties of a file system object, many of which are returned via the stat() system call. inode cache grows dynamically holding at least all inodes mapped by the dcache. will shrink with application memory pressure. size can be seen via /proc
 
-## File System Features
+## file system features
 
-### Block versus Extent
+### block versus extent
 
-#### Block-based file systems
-store data in fixed-size blocks, referenced by pointers stored in metadata blocks. For large files this can require many block pointers and metadata blocks, and the placement of blocks may become scattered, leading to random I/O. Some block-based file-systems attempt to place blocks contiguously to avoid this. Another approach is to use variable block sizes, so that larger sizes can be used as the file grows, which also reduces metadata overhead.
+#### block-based file systems
+store data in fixed-size blocks, referenced by pointers stored in metadata blocks. for large files this can require many block pointers and metadata blocks, and the placement of blocks may become scattered, leading to random i/o. some block-based file-systems attempt to place blocks contiguously to avoid this. another approach is to use variable block sizes, so that larger sizes can be used as the file grows, which also reduces metadata overhead.
 
-#### Extent-based filesystems
-preallocate contiguous space for files (extents). Growing them as needed. For the cost of space overhead, this improves streaming performance and can improve random I/O performance as file data is localized.
+#### extent-based filesystems
+preallocate contiguous space for files (extents). growing them as needed. for the cost of space overhead, this improves streaming performance and can improve random i/o performance as file data is localized.
 
-### Journaling:
+### journaling:
 
-A *log* recording changes to the file system so that in the event of a system crash, changes can be replayed atomically. Allows file systems to recovery to a consistent state quickly. The journal is written to disk synchronously, and for some file systems it can be configured to use a separate device. Some journals record both data and metadata (I/O written twice, can consume I/O resources) others write only metadata and maintain data integrity by employing copy-on-write.
+a *log* recording changes to the file system so that in the event of a system crash, changes can be replayed atomically. allows file systems to recovery to a consistent state quickly. the journal is written to disk synchronously, and for some file systems it can be configured to use a separate device. some journals record both data and metadata (i/o written twice, can consume i/o resources) others write only metadata and maintain data integrity by employing copy-on-write.
 
-*Log-structured file system* consists of only a journal where all data and metadata updates are written to a continuous and circular log. Optimizes write performance, as write are always sequential and can be merged to use larger I/O sizes.
+*log-structured file system* consists of only a journal where all data and metadata updates are written to a continuous and circular log. optimizes write performance, as write are always sequential and can be merged to use larger i/o sizes.
 
-### Copy-on-write:
+### copy-on-write:
 
-A filesystem that does not overwrite existing blocks but instead follows these steps:
+a filesystem that does not overwrite existing blocks but instead follows these steps:
 
-1. Write blocks to a new location (a new copy)
+1. write blocks to a new location (a new copy)
 
-2. Updates reference to new blocks
+2. updates reference to new blocks
 
-3. Add old blocks to the free list
+3. add old blocks to the free list
 
-This helps file system integrity in the event of a system failure and also improves performance by turning random writes into sequential ones.
+this helps file system integrity in the event of a system failure and also improves performance by turning random writes into sequential ones.
 
-### Scrubbing
+### scrubbing
 
-Asynchronous reads of all data blocks and verifies checksums, to detect failed drivers as early as possible, ideally while the failure is still recoverable due to RAID. Scrubbing negatively affects performance.
+asynchronous reads of all data blocks and verifies checksums, to detect failed drivers as early as possible, ideally while the failure is still recoverable due to raid. scrubbing negatively affects performance.
 
-### ToDo: Filesystem types
+### todo: filesystem types
 
-## Volumes and Pools
+## volumes and pools
 
-Allow file systems to be built upon multiple disks and can be configured using different RAID strategies.
+allow file systems to be built upon multiple disks and can be configured using different raid strategies.
 
-### Volumes
-present multiple disks as one virtual disk or disk partition (LVM). When built upon whole disks (and not slices or partitions), volumes isolate workloads, reducing performance issues of contention
+### volumes
+present multiple disks as one virtual disk or disk partition (lvm). when built upon whole disks (and not slices or partitions), volumes isolate workloads, reducing performance issues of contention
 
-### Pooled storage
-multiple disks in a storage pool, from which multiple file systems can be created. Pooled storage is more flexible than volume storage, as file systems can grow and shrink regardless of backing devices. This approach is used by *ZFS* and *btrfs*. Pooled storage can use all disk devices for all file systems, improving performance. Workloads are not isolated; in some cases, multiple pools may be used to separate workloads, given the trade-off of some flexibility, as disk devices must be initially placed in one pool or another.
+### pooled storage
+multiple disks in a storage pool, from which multiple file systems can be created. pooled storage is more flexible than volume storage, as file systems can grow and shrink regardless of backing devices. this approach is used by *zfs* and *btrfs*. pooled storage can use all disk devices for all file systems, improving performance. workloads are not isolated; in some cases, multiple pools may be used to separate workloads, given the trade-off of some flexibility, as disk devices must be initially placed in one pool or another.
 
 ![image alt text](image_11.png)
 
-*Illustration of Volume vs pooled storage*
+*illustration of volume vs pooled storage*
 
-### Additional performance considerations:
+### additional performance considerations:
 
-* Stripe width: matching this to the workload
+* stripe width: matching this to the workload
 
-* Observability: Virtual device utilization can be confusing, check the separate physical devices.
+* observability: virtual device utilization can be confusing, check the separate physical devices.
 
-* CPU overhead: especially when performing RAID parity computation. This has become less of an issue on modern, faster CPUs
+* cpu overhead: especially when performing raid parity computation. this has become less of an issue on modern, faster cpus
 
-* Rebuilding: also called resilvering, this is when an empty disk is added to a RAID group (e.g. replacing a failed disk). Can significantly hurt performance.
+* rebuilding: also called resilvering, this is when an empty disk is added to a raid group (e.g. replacing a failed disk). can significantly hurt performance.
 
-## Methodology
+## methodology
 
-### Latency Analysis
-Measuring the latency of all file system operations.(not just I/O).
+### latency analysis
+measuring the latency of all file system operations.(not just i/o).
 
 #### operation latency
 ```
 (operation latency)  = time (operation completion) - time (operation request)
 ```
 
-#### Transaction Cost
-Total time spent waiting for the file system during an application transaction.
+#### transaction cost
+total time spent waiting for the file system during an application transaction.
 ```
 (percent time in file system) = 100 * (total blocking file system latency) / (application transaction time)
 ```
 
-#### Workload Characterization
-Basic attributes for characterizing the filesystem Workload
+#### workload characterization
+* random versus sequential file offset access
 
-* Operation rate and operation types
+#### advanced workload characterization/checklist
 
-* File I/O throughput
+* what is the file system cache hit ratio? miss rate?
 
-* File I/O size
+* what are the file system cache capacity and current usage?
 
-* Read/write ratio
+* what other caches are present (directory, inode, buffer) and what are their stats?
 
-* synchronous write ratio
+* which applications or users are using the file system?
 
-* Random versus sequential file offset access
+* what files and directories are being accessed? created and deleted?
 
-#### Advanced Workload Characterization/Checklist
+* have any errors been encountered? was this due to invalid requests, or issues fom the file system?
 
-* What is the file system cache hit ratio? Miss rate?
+* why is the file system i/o issued (user-level call path)?
 
-* What are the file system cache capacity and current usage?
+* to what degree is the file system i/o application synchronous?
 
-* What other caches are present (directory, inode, buffer) and what are their stats?
+* what is the distribution of i/o arrival times?
 
-* Which applications or users are using the file system?
+#### performance characteristics
 
-* What files and directories are being accessed? Created and deleted?
+* what is the average file system operation latency?
 
-* Have any errors been encountered? Was this due to invalid requests, or issues fom the file system?
+* are there any high-latency outliers?
 
-* Why is the file system I/O issued (user-level call path)?
+* what is the full distribution of operation latency?
 
-* To what degree is the file system I/O application synchronous?
+* are system resource controls or the file system or disk i/o present and active?
 
-* What is the distribution of I/O arrival times?
+#### performance monitoring
+can identify active issues and patterns of behavior over time. key metrics are operation rate and operation latency. both rate and latency may be recorded for each operation type (read, write, stat, open, close, etc..)
 
-#### Performance characteristics
-
-* What is the average file system operation latency?
-
-* Are there any high-latency outliers?
-
-* What is the full distribution of operation latency?
-
-* Are system resource controls or the file system or disk I/O present and active?
-
-#### Performance Monitoring
-Can identify active issues and patterns of behavior over time. Key metrics are operation rate and operation latency. Both rate and latency may be recorded for each operation type (read, write, stat, open, close, etc..)
-
-## Tools Rundown for File systems
+## tools rundown for file systems
 
 ### strace
 system call debuggers
@@ -1069,22 +1064,22 @@ system call debuggers
 ```
 strace timing reads on an ext4 file system
 
-strace -ttT -p 845
+strace -ttt -p 845
 [...]
 18:41:01.513110 read(9, "\334\260/\224\356k..."..., 65536) = 65536 <0.018225>
-18:41:01.531646 read(9, "\371X\265|\244\317..."..., 65536) = 65536 <0.000056>
+18:41:01.531646 read(9, "\371x\265|\244\317..."..., 65536) = 65536 <0.000056>
 18:41:01.531984 read(9, "\357\311\347\1\241..."..., 65536) = 65536 <0.005760>
 18:41:01.538151 read(9, "*\263\264\204|\370..."..., 65536) = 65536 <0.000033>
 18:41:01.538549 read(9, "\205q\327\304f\370..."..., 65536) = 65536 <0.002033>
 18:41:01.540923 read(9, "\6\2738>zw\321\353..."..., 65536) = 65536 <0.000032>
 
 -tt prints relative timestamps (on left)
--T  prints the syscall times (on right)
+-t  prints the syscall times (on right)
 
-Each read() was 64Kb, the first taking 18 ms, followed by 56 μs (likely cached), then 5 ms. The reads were to file descriptor 9.
+each read() was 64kb, the first taking 18 ms, followed by 56 μs (likely cached), then 5 ms. the reads were to file descriptor 9.
 ```
 
-### DTrace
+### dtrace
 dynamic tracing of file system operations, latency
 
 ### free
@@ -1092,15 +1087,15 @@ cache capacity statistics
 ```
 free -m
               total        used        free      shared  buff/cache   available
-Mem:           7863        3786        1892        1164        2184        2583
-Swap:          8070         178        7892
+mem:           7863        3786        1892        1164        2184        2583
+swap:          8070         178        7892
 
 ```
 
 ### top
-includes memory usage Summary
+includes memory usage summary
 ```
-Mem: 889484k total, 819056k used, 70428k free, 134024k buffers
+mem: 889484k total, 819056k used, 70428k free, 134024k buffers
 ```
 
 ### vmstat
@@ -1140,52 +1135,52 @@ kernel slab allocator statistics
 ```
 slabtop ran with -o flag
 
-Active / Total Objects (% used)    : 604280 / 689287 (87.7%)
-Active / Total Slabs (% used)      : 21103 / 21103 (100.0%)
-Active / Total Caches (% used)     : 75 / 136 (55.1%)
-Active / Total Size (% used)       : 158667.53K / 181759.62K (87.3%)
-Minimum / Average / Maximum Object : 0.01K / 0.26K / 18.50K
+active / total objects (% used)    : 604280 / 689287 (87.7%)
+active / total slabs (% used)      : 21103 / 21103 (100.0%)
+active / total caches (% used)     : 75 / 136 (55.1%)
+active / total size (% used)       : 158667.53k / 181759.62k (87.3%)
+minimum / average / maximum object : 0.01k / 0.26k / 18.50k
 
- OBJS ACTIVE  USE OBJ SIZE  SLABS OBJ/SLAB CACHE SIZE NAME                   
-147225 113545  77%    0.10K   3775       39     15100K buffer_head            
-115437 115017  99%    0.19K   5497       21     21988K dentry                 
-57510  48769  84%    1.05K   1917       30     61344K ext4_inode_cache       
-53632  44307  82%    0.06K    838       64      3352K kmalloc-64             
-50820  45975  90%    0.20K   2541       20     10164K vm_area_struct         
-33908  26462  78%    0.57K   1211       28     19376K radix_tree_node        
-31348  31348 100%    0.12K    922       34      3688K kernfs_node_cache      
-28390  25916  91%    0.05K    334       85      1336K ftrace_event_field     
-24064  19544  81%    0.03K    188      128       752K kmalloc-32             
-20553  17099  83%    0.08K    403       51      1612K anon_vma               
-17528  16545  94%    0.55K    626       28     10016K inode_cache            
-14382  11141  77%    0.04K    141      102       564K ext4_extent_status     
-14272  12791  89%    0.25K    446       32      3568K kmalloc-256   
+ objs active  use obj size  slabs obj/slab cache size name                   
+147225 113545  77%    0.10k   3775       39     15100k buffer_head            
+115437 115017  99%    0.19k   5497       21     21988k dentry                 
+57510  48769  84%    1.05k   1917       30     61344k ext4_inode_cache       
+53632  44307  82%    0.06k    838       64      3352k kmalloc-64             
+50820  45975  90%    0.20k   2541       20     10164k vm_area_struct         
+33908  26462  78%    0.57k   1211       28     19376k radix_tree_node        
+31348  31348 100%    0.12k    922       34      3688k kernfs_node_cache      
+28390  25916  91%    0.05k    334       85      1336k ftrace_event_field     
+24064  19544  81%    0.03k    188      128       752k kmalloc-32             
+20553  17099  83%    0.08k    403       51      1612k anon_vma               
+17528  16545  94%    0.55k    626       28     10016k inode_cache            
+14382  11141  77%    0.04k    141      102       564k ext4_extent_status     
+14272  12791  89%    0.25k    446       32      3568k kmalloc-256   
 
-Shows sizes of various caches, inode_cache and ext4_inode_cache are present here
+shows sizes of various caches, inode_cache and ext4_inode_cache are present here
 ```
 
 ### /proc/meminfo
 kernel memory breakdowns
 ```
 cat /proc/meminfo
-MemTotal:        8052020 kB
-MemFree:         1702392 kB
-MemAvailable:    2456420 kB
-Buffers:           54048 kB
-Cached:          2053356 kB
-SwapCached:        10344 kB
+memtotal:        8052020 kb
+memfree:         1702392 kb
+memavailable:    2456420 kb
+buffers:           54048 kb
+cached:          2053356 kb
+swapcached:        10344 kb
 ```
 
-## Other Tools
+## other tools
 
 **df** : report file system usage and capacity
 **mount** : can show file system mounted options
-**inotify**: a Linux framework for monitoring file system Event-based
+**inotify**: a linux framework for monitoring file system event-based
 
-## Experimentation
-Tools for actively testing file system performance
+## experimentation
+tools for actively testing file system performance
 
-### Ad Hoc
+### ad hoc
 *dd* can test sequential file system performance.
 
 ```
@@ -1193,45 +1188,114 @@ write: dd if=/dev/zero of=file1 bs=1024k count=1k
 read: dd if=file1 of=/dev/null bs=1024k
 ```
 
-### Micro-Benchmarking Tools
+### micro-benchmarking tools
 
-* Bonnie, Bonnie++
+* bonnie, bonnie++
 
-* Flexible IO Tester (fio)
+* flexible io tester (fio)
 
-* FileBench
+* filebench
 
-### Cache flushing
-Clearing various caches before benchmarking
+### cache flushing
+clearing various caches before benchmarking
 
 ```
-To free pagecache:
+to free pagecache:
   echo 1 > /proc/sys/vm/drop_caches
-To free dentries and inodes:
+to free dentries and inodes:
   echo 2 > /proc/sys/vm/drop_caches
-To free pagecache, dentries and inodes:
+to free pagecache, dentries and inodes:
   echo 3 > /proc/sys/vm/drop_caches
 ```
 
-## Tuning
+## tuning
 
 ### ext4
 
 **tune2fs**: can be used to tune filesystem settings
 **mount**: can be used to adjust file system configuration
 
-**noatime option**: filesystem option for disabling file access timestamp updates, reducing back-end I/O, improving overall performance.
+**noatime option**: filesystem option for disabling file access timestamp updates, reducing back-end i/o, improving overall performance.
 
 ```
-tune2fs -O dir_index /dev/{dev}
+tune2fs -o dir_index /dev/{dev}
 
-Uses hashed B-trees to speed up lookups in large directories
+uses hashed b-trees to speed up lookups in large directories
 ```
 
 ```
-e2fsck -D -f /dev/{dev}
+e2fsck -d -f /dev/{dev}
 
-Used to reindex directories in a file system.
+used to reindex directories in a file system.
 ```
 
-# Disks Level
+# disks level
+under high load disks become a bottleneck. *disks* refers to the primary storage devices of the system (both magnetic rotating disks or ssd)
+
+## terminology
+
+<table>
+  <tr>
+    <td>Virtual disk</td>
+    <td>an emulation of a storage device. It appears to the system as a single physical disk; however, it may be constructed from multiple disks</td>
+  </tr>
+  <tr>
+    <td>Transport</td>
+    <td>The physical bus used for communication, including data transfers(I/O) and other disk commands</td>
+  </tr>
+  <tr>
+    <td>Sector</td>
+    <td>A block of storage on disk, traditionally 512 bytes in size</td>
+  </tr>
+  <tr>
+    <td>I/O</td>
+    <td>Strictly speaking for disks, this is reads and writes only and would not include other disk commands. I/O consists of, at least, the direction (read or write), a disk address (location), and a size (bytes) </td>
+  </tr>
+  <tr>
+    <td>Disk commands</td>
+    <td>Apart from reads and writes, disks may be commanded to perform other non-data-transfer commands (e.g, cache flush)</td>
+  </tr>
+  <tr>
+    <td>Throughput</td>
+    <td>With disks, throughput commonly refers to the current data transfer rate, measured in bytes per second.</td>
+  </tr>
+  <tr>
+    <td>Bandwidth</td>
+    <td>This is the maximmum possible data transfer rate for storage transports or controllers</td>
+  </tr>
+  <tr>
+    <td>I/O Latency</td>
+    <td>Time for an I/O operation, used more broadly across the operating system stack and not just at the device level. Be aware that networking uses this term differently, with latency referring to the time to initiate an I/O, followed by data transfer time.</td>
+  </tr>
+  <tr>
+    <td>Latency outliers</td>
+    <td>disk I/O with unusually high latency</td
+  </tr>
+</table>
+
+## Models
+Simple modules used for illustration of basic principles of disk I/O performance
+
+### Simple disk
+
+![image alt text](image_disks_simple_disk.png)
+
+I/O accepted by the disk may be either waiting on the queue or being serviced. 
+
+### Caching disk
+
+![image alt text](image_disks_caching_disk.png)
+
+Addition of an on-disk cache allows some read requests to be satisfied from a faster memory type.
+
+Cache can also be used as *write-back* cache. Gives higher level subsystem a write acknowledgment before disk actually writes data to spindles.
+
+### Controller
+
+![image alt text](image_disks_controller.png)
+
+Bridges the CPU I/O transport with the storage transport and attached disk devices. Also called a *host bus adaptor* (HBAs)
+
+## Concepts
+
+### Measuring Time
