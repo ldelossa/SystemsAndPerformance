@@ -1,7 +1,9 @@
+**This document is a reference guide for my own personal use. Outline, concepts, and text has been taken (at times verbatim) from Brendan Gregg's "Systems Performance: Enterprise and the Cloud". Moving forward I plan on incorporating text from Michael Kerrisk's "The Linux Programming Interface: A Linux and Unix Systems Programming Handbook" in order to supplement detail at a lower programmatic level. I TAKE ABSOLUTELY NO CREDIT FOR ANY WORK IN THIS DOCUMENT AND THIS IS ONLY A SUMMARIZATION. If you are interested in these topics I HIGHLY recommend buying two books mentioned above.**
+
 <!-- TOC depthFrom:1 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
 - [Application Level](#application-level)
-	- [**Initialization tax & I/O Size**](#initialization-tax-io-size)
+	- [Initialization tax & I/O Size](#initialization-tax-io-size)
 	- [Buffering](#buffering)
 	- [Concurrency and Parallelism](#concurrency-and-parallelism)
 		- [Non-Blocking I/O](#non-blocking-io)
@@ -121,12 +123,27 @@
 		- [Controller](#controller)
 	- [Concepts](#concepts)
 		- [Measuring Time](#measuring-time)
+			- [Calculating Time](#calculating-time)
+		- [Time Scales](#time-scales)
+		- [Caching](#caching)
+		- [Random versus Sequential I/O](#random-versus-sequential-io)
+		- [Read/Write Ratio](#readwrite-ratio)
+		- [I/O Size](#io-size)
+		- [IOPs](#iops)
+			- [Non-Data-Transfer Disk Commands](#non-data-transfer-disk-commands)
+			- [Utilization](#utilization)
+				- [Virtual Disk Utilization](#virtual-disk-utilization)
+			- [Saturation](#saturation)
+			- [I/O wait](#io-wait)
+	- [TODO: Architecture (Physical)](#todo-architecture-physical)
+	- [Operating System Disk I/O Stack](#operating-system-disk-io-stack)
+		- [Block Device Interface](#block-device-interface)
 
 <!-- /TOC -->
 
 # Application Level
 
-## **Initialization tax & I/O Size**
+## Initialization tax & I/O Size
 Transferring I/O incurs overhead such as: initializing buffers, making a system call, context switching, allocating kernel metadata, checking process privileges & limits, mapping addresses to devices, executing kernel and drive code to delivery I/O and freeing metadata and buffers. This tax occurs for both small and large I/O alike. The more I/O transferred by each I/O, the better. Increasing I/O size can increase performance by minimizing overhead. 1 x 128kb I/O is more efficient than 128 x 1kb I/O. However, there is a down size when the application does not need to read a large I/O size. For example a DB performing 8kb random read may run more slowly with 128kb I/O size, as 120kb will be wasted (introducing I/O latency).
 
 **Summary** :I/O size should match the average request size of the application.
@@ -1280,7 +1297,7 @@ Simple modules used for illustration of basic principles of disk I/O performance
 
 ![image alt text](image_disks_simple_disk.png)
 
-I/O accepted by the disk may be either waiting on the queue or being serviced. 
+I/O accepted by the disk may be either waiting on the queue or being serviced.
 
 ### Caching disk
 
@@ -1299,3 +1316,243 @@ Bridges the CPU I/O transport with the storage transport and attached disk devic
 ## Concepts
 
 ### Measuring Time
+
+* **disk I/O Latency**: response time for storage devices; the time from the I/O request to I/O completion.
+  * **Service time**: the time an I/O takes to be actively processed (serviced), excluding time waiting on a queue
+  * **Wait time**: the time an I/O was waiting on a queue to be serviced
+
+![image alt text](image_disks_service_time.png)
+
+Perspective matters when measuring time. **Disk response time** may describe the service time as observed from the operating system, while **I/O response time** from the perspective of the application may refer to everything beneath the system call layer (service time, all wait times, and code path execution time.)
+
+Service time from the block device is generally treated as a measure of disk performance (iostat); Be aware that other queues and buffers  live before the block device (drivers for the block device) and impose their own latency. This latency is included in service time when analyzing just the block device.
+
+#### Calculating Time
+
+An average disk service time can be inferred using IOPs and utilization
+
+```
+(disk service time) = utilization/IOPs
+```
+
+For example, a utilization of 60% and an IOPs of 300 gives an average service time of 2 ms (600ms/300 IOPs). This assumes the utilization reflects a single device (or service center), which can process only one I/O at a time. Disks can typically process multiple I/O in parallel.
+
+### Time Scales
+
+The below illustration gives a perspective of time scales.
+
+![image alt text](image_disks_timescale.png)
+
+A disk can return two types of latency: one for on-disk cache hits and one for cache misses. These values are typically averaged together, which is not completely accurate. Instead you should consider these two discrete metrics and a histogram does I/O latency visualization better justice.
+
+### Caching
+
+At the disk-device-driver level the following caches are present:
+
+![image alt text](image_disks_caches.png)
+
+### Random versus Sequential I/O
+
+I/O workload characteristic based on the relative location of the I/O on disk (disk offset). This focuses on magnetic rotating disks. Random I/O created more latency on rotating disks due to seek time (if the reading head was past the target block, the difference of an entire rotation will need to occur before target block is read.)
+
+SSDs should perform no differently between Random and Sequential I/O. (Small differences in SSD architectures may cause some differences)
+
+Random I/O can not be characterized by the OS's perspective of block addresses. The disk controller has it's own maps of address to block lookups which may be different from the OS.
+
+### Read/Write Ratio
+
+I/O workload characteristic measuring the ratio of reads to writes, referring to either IOPs or Throughput. Can be expressed as the ratio over time, as a percentage.
+
+A system with high read rate may benefit most from adding cache. A system with a high write rate may benefit most from adding more disks to increase maximum available throughput and IOPS.
+
+Reads and writes may themselves be different workload patterns (Reads maybe random I/O, while writes may be sequential)
+
+### I/O Size
+
+Average I/O Size, or Distribution of I/O sizes. Larger I/O sizes typically proide higher throughput, although for longer per-I/O latency.
+
+The I/O size may be altered by the disk subsystem (split to 512-byte blocks). I/O can also be Inflated and Deflated (see file systems section)
+
+SSDs perform very different with different read and write sizes. E.g a flash-based disk drive may perform optimally with 4 Kbyte reads and 1 Mbyte writes.
+
+### IOPs
+
+Because of Random/Sequential I/O, Read/Write Ratio, and I/O size, IOPs are not created equal and cannot be directly compared between different devices and workloads. An IOPs value doesn't mean a lot on its own and can't be used alone to accurately compare workloads.
+
+Example:
+With rotational disks, a workload of 5,000 sequential IOPs may be much faster then one of 1,000 random IOPs. SSD IOPs are also difficult to compare, since their I/O performance is often relative to I/O size and direction.
+
+IOPs need to viewed in perspective to the 3 factors above. Must use time-based metrics to see IOPs true performance indicators.
+
+#### Non-Data-Transfer Disk Commands
+
+Disks have their own commands for managing disk functions. These are not based on ingress or egress block data. These can affect performance also.
+
+#### Utilization
+
+Time a disk was busy actively performing work during an interval.
+
+Disks at 100% utilization are a likely source of performance issues.
+
+A medial utilization may show the cliff at which disk performance falls off (highly dependent on workload).
+
+To confirm whether high utilization is causing application issues, study the disk reponse time and whether the application is blocking on I/O. Application or operating system may be performing I/O asynchronously, such that slow I/O is not directly causing application to wait.
+
+Monitoring interval matters, a lot of disk I/O happens in bursts which you are possible to miss.
+
+##### Virtual Disk Utilization
+
+Virtual disks built on top of other volumes display the following difficulties when attempting to monitor:
+
+* Virtual disks that include a write-back cache may not appear busy during write workloads, since the disk controller returns write completions immediately, despite the underlying disks being busy sometime afterward.
+
+* A virtual disk that is 100% busy, and is built upon multiple physical disks, may be able to accept more work. In this case, 100% may men that some disks were busy all the time, but not all the disks all the time, and therefore some disks were idle.
+
+You're better off analyzing per disk metrics.
+
+#### Saturation
+
+A measure of queued work beyond what the resource can deliver. For disks: the average length of the device wait queue in the operating system.
+
+A disk at 100% utilization may have no saturation or it may have a lot.
+
+Also: 50% disk utilization during an interval may mean 100% utilized for half that time and idle for the rest.
+
+#### I/O wait
+
+per-CPU performance metric showing time spent idle, when there are threads on the CPU dispatcher queue (in sleep state) that are blocked on disk I/O. This divides CPU idle time into time spent with nothing to do, and time spend block on disk I/O. A high rate of I/O wait per CPU shows that the disks may be bottleneck, leaving the CPU idle while it waits on them.
+
+I/O awit can be misleading. If another process begins to use CPU, I/O wait will go down as the CPU has less idle time, but target process being monitored is still blocking for I/O. On the contrary making a piece of code more efficient may increase the idle time of the CPU, revealing more I/O wait in relation to previous CPU activity.
+
+I/O wait is really measuring: disks busy, CPUs idle. Any wait I/O can be treated as a system bottle neck and removing this is advantageous.
+
+## TODO: Architecture (Physical)
+
+## Operating System Disk I/O Stack
+
+ ![image alt text](image_disks_IO_stack.png)
+
+### Block Device Interface
+
+Created to access storage devices in units of blocks, each 512 bytes and to provide buffer cache to improve performance. Buffer cache role has diminished.
+
+Can usually be observed with *iostat*.
+
+![image alt text](image_disks_block_device_interface.png)
+
+**Elevator layer**: provides generic capabilities to stor, merge, and batch requests for delivery. these capabilities achieve throughput and lower I/O latency.
+
+#### * I/O scheduler policies
+
+  * Noop: This doesn't perform scheduling (noop is CPU-talk for no-operation) and can be used when the overhead of scheduling is deemed unncessary (for example, in a RAMdisk)
+
+	* Deadline: Attempts to enforce a deadline; for example, read and write expiry times in units of milliseconds may be selected. Useful for real-time systems. Can also solve problems of **starvation**: Where I/O request is starved of disk resources as newly issued I/O jump the queue, resulting in latency outliers. Starvation can occur due to *writes starving reads*, and as a consequence of elevator seeking and heavy I/O at one area of disk starving I/O to another. This scheduler uses three separate queues for I/O: read FIFO, write FIFO, and sorted.
+
+	* Anticipatory: an enhanced version of deadline, with heuristics to anticipate I/O performance, improving global throughput. These can include pausing for milliseconds after reads rather then immediately servicing writes, on the prediction that another read request may arrive during that time for a nearby disk location, thus reducing overall rotational disk head seeks.
+
+	* CFQ: The completely fair queueing scheduler allocates I/O time slices to processes, similar to CPU scheduling, for fair usage of disk resources. It also allows priorities and classes to be set for user proceses, via the *ionice* command.
+
+	After I/O scheduling, the request is placed on the block device queue to be issued by the device.   
+
+## Methodology
+
+### Tools
+
+1. *iostat* - using extended mode to look for busy disks (over 60% utilization), high average service times (over, say, 10ms), and high IOPs (depends)
+2. *iotop* - to identify which process is causing disk I/O
+3. *dtrace/stap/perf* - including *iosnoop* tool to examine disk I/O latency in detail, looking for latency outliers (over, say, 100 ms)
+
+### USE Methodology
+
+#### Disk devices
+**Utilization**: The time the device was busy
+**Saturation**: The degree to which I/O is waiting in a queue
+**Errors**: device Errors
+
+#### Disk controllers
+**Utilization**: current versus maximum throughput, and the same for operation rate
+**Saturation**: the degree to which I/O is waiting due to controller Saturation
+**Errors**: controller Errors
+
+### Workload characteristics
+
+* I/O rate
+* I/O throughput
+* I/O Size
+* Random versus sequential
+* Read/write ratio
+
+Example workload:
+The system disks have a light random read workload, averaging 350 IOPs with a throughput of 3 Mbytes/s, running at 96% reads. There are occasional short bursts of sequential writes, which drive the disks to a maximum of 4,800 IOPs and 560 Mbytes/s. The reads are around 8 Kbytes in size and the writes around 128 Kbytes
+
+### Advanced Workload Checklist
+
+* What is the IOPs rate system-wide? Per disk? Per Controller?
+* What is the throughput system-wide? Per disk? Per Controller?
+* Which applications or users are using the disks?
+* What file systems or files are being accessed?
+* Have any errors been encountered? Were they due to invalid requests, or issues on disk?
+* How balanced is the I/O over available disks?
+* What is the IOPs for each transport bus involved?
+* What is the throughput for each transport bus involved?
+* What non-data-transfer disk commands are being issued?
+* To what degree is disk I/O application-synchronous?
+* What is the distribution of I/O arrival times?
+
+### Performance characteristics
+
+* How busy is each disk (utilization)?
+* How saturated is each disk with I/O (wait queuing)?
+* What is the average I/O service time?
+* What is the average I/O wait time?
+* Are there I/O outliers with high latency?
+* What is the full distribution of I/O latency?
+* Are system resource controls, such as I/O throttling, present and active?
+* What is the latency of non-data-transfer disk commands
+
+### Latency Analysis
+
+The time between an I/O request and th completion interrupt. If this matches the I/O latency at the application level, it's usually safe to assume that the I/O latency originates from the disks, allowing you to focus your investigation on them.
+
+### Event Tracing
+
+Logging the following details in order for further analysis
+
+* Disk Device ID
+* I/O type: read or write
+* I/O offset: disk location
+* I/O size: bytes
+* I/O request timestamp: when an I/O was issued to the device
+* I/O completion timestamp: whn the I/O event completed
+* I/O completion status: errors
+
+### Micro Benchmarking
+
+### Disks
+* Maximum disk throughput
+* Maximum disk operation rate(IOPs): 512-byte reads, offset 0 only
+* Maximum disk random reads(IOPs): 512-byte reads, random offsets
+* Read latency profile (average microseconds): sequential reads, repeat for 512 bytes, 1 K, 2 K, 4K and so on.
+* Random I/O latency profile(average microseconds): 512-byte reads, repeat for full offset span, beginning offsets only, end offsets only.
+
+#### Disk controllers
+Disk controllers are tested by applying workloads to multiple disks until the controller is limited.
+
+* Maximum controller throughput(megabytes per second): 128 Kbytes, offset 0 only
+* Maximum controller operation rate (IOPs): 512-byte reads, offset 0 only
+
+### TODO: Scaling
+
+## Analysis
+
+### iostat
+
+### sar
+
+### pidstat,iotop
+
+### blktrace
+
+### MegaCLI
+
+### smartctl
