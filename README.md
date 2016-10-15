@@ -1568,13 +1568,138 @@ Disk controllers are tested by applying workloads to multiple disks until the co
 ## Analysis
 
 ### iostat
+Various per-disk statistics. *iostat* focuses only on disks. Application I/O may not be displayed in *iostat* if it never makes it to disk.
+
+```
+iostat arguments:
+-c display CPU report
+-d display disk report
+-k use kilobytes instead of (512-byte) blocks
+-m use megabytes instead of (512-byte) blocks
+-p include per-partition statistics
+-t timestamp output
+-x extended statistics
+-z skip displaying zero-activity summaries
+
+without any argumetns -c and -d are specified, first output is summary-since-boot.
+
+$ iostat
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          11.01    0.15    2.48    1.10    0.00   85.26
+
+Device:            tps    kB_read/s    kB_wrtn/s    kB_read    kB_wrtn
+sda               3.45        14.30      1428.42    2386722  238405933
+
+tps - transactions per second (IOPs)
+kB_read/s,kB_wrtn/s: kilobytes read per second, and written per second
+kB_read,kB_wrtn: total kilobytes read and written
+
+$ iostat -xkdz 1 (extended output)
+Device:         rrqm/s   wrqm/s     r/s     w/s    rkB/s    wkB/s avgrq-sz avgqu-sz   await r_await w_await  svctm  %util
+sda               0.02     3.45    0.97    2.48    14.28  1426.81   834.61     0.01    3.03    0.68    3.95   1.28   0.44
+
+Device:         rrqm/s   wrqm/s     r/s     w/s    rkB/s    wkB/s avgrq-sz avgqu-sz   await r_await w_await  svctm  %util
+
+Device:         rrqm/s   wrqm/s     r/s     w/s    rkB/s    wkB/s avgrq-sz avgqu-sz   await r_await w_await  svctm  %util
+sda               0.00    17.00    0.00   14.00     0.00   120.00    17.14     0.04    2.57    0.00    2.57   2.57   3.60
+
+rrqm/s- read requests placed on the driver request queue and merged per second
+wrqm/s- write requests placed on the driver request queue and merged per second
+r/s- read requests issues to the disk device per second
+w/s- write requests issued to the disk device per second
+rkB/s- kilobytes read from the disk device per second
+wkB/s- kilobytes written to the disk device per second
+avgrq-sz- average request size in sectors (512 bytes)
+avgqu-sz- average number of requests both waiting in the driver queue and active on the device
+await- average I/O response time, including time waiting in th driver request queue and the I/O response time of the device (ms)
+r_await- same as await, but for reads only (ms)
+w_await- same as await, but for writes only (ms)
+svctm- average (inferred) I/O response time for the disk device (ms)
+%util- percent of time the device was busy processing I/O requests (utilization)
+
+Nonezero counts in the rrqm/s and wrqm/s columns show that contiguous requests were merged before delivery to the device, to improve performance.
+
+The r/s and w/s columns show the requests actually issued to the device
+
+Since avgrq-sz is after merging, small sizes (16 sectors or less) are an indicator of a random I/O workload that was unable to be merged. Large sizes may either be larger I/O or a merged sequential workload (indicated by earlier columns)
+
+await is the most important metric for delivered performance. Application may use techniques to mitigate w_await (write-through), focus on r_await instead.
+
+```
 
 ### sar
+Historical disk statistics
 
+```
+sar -d
+
+most columns are same as iostat except:
+
+tps- device data transfers per second
+rd_sec/s, wr_sec/s: read and write sectors (512 bytes) per second
+```
 ### pidstat,iotop
+disk I/O usage by process
+
+```
+pidstat -d 1
+
+04:00:19 PM   UID       PID   kB_rd/s   kB_wr/s kB_ccwr/s iodelay  Command
+04:00:20 PM     0     20158     -1.00     -1.00     -1.00       1  kworker/0:0
+
+04:00:20 PM   UID       PID   kB_rd/s   kB_wr/s kB_ccwr/s iodelay  Command
+04:00:21 PM     0     20184     -1.00     -1.00     -1.00       1  kworker/1:0
+
+04:00:21 PM   UID       PID   kB_rd/s   kB_wr/s kB_ccwr/s iodelay  Command
+04:00:22 PM     0     20158     -1.00     -1.00     -1.00       1  kworker/0:0
+
+04:00:22 PM   UID       PID   kB_rd/s   kB_wr/s kB_ccwr/s iodelay  Command
+04:00:23 PM     0       196     -1.00     -1.00     -1.00       4  jbd2/sda2-8
+04:00:23 PM  1000      3877      0.00     40.00      4.00       0  chrome
+04:00:23 PM  1000     19461      0.00     16.00      4.00       0  atom
+04:00:23 PM     0     20158     -1.00     -1.00     -1.00       1  kworker/0:0
+
+kB_red/s- kilobytes read per second
+kB_wd/s- kilobytes issued for write per second
+kB_ccwr/s- kilobytes cancled for write per second (w.g. overwritten before flush)
+
+```
+
+```
+iotop
+
+-b --batch log usage over time (non interactive)
+-P only show processes. Normally iotop shows all threads.
+-a Show accumulated I/O instead of bandwidth.
+-k kilobytes
+-t add timestamps on each limit_in_bytes
+
+iotop -b -p {pid}
+
+Total DISK READ :       0.00 B/s | Total DISK WRITE :       0.00 B/s
+Actual DISK READ:       0.00 B/s | Actual DISK WRITE:       0.00 B/s
+  TID  PRIO  USER     DISK READ  DISK WRITE  SWAPIN      IO    COMMAND
+11338 be/4 ldelossa    0.00 B/s    0.00 B/s  0.00 %  0.00 % spotify
+Total DISK READ :       0.00 B/s | Total DISK WRITE :       0.00 B/s
+Actual DISK READ:       0.00 B/s | Actual DISK WRITE:       0.00 B/s
+  TID  PRIO  USER     DISK READ  DISK WRITE  SWAPIN      IO    COMMAND
+11338 be/4 ldelossa    0.00 B/s    0.00 B/s  0.00 %  0.00 % spotify
+Total DISK READ :       0.00 B/s | Total DISK WRITE :       0.00 B/s
+Actual DISK READ:       0.00 B/s | Actual DISK WRITE:       0.00 B/s
+  TID  PRIO  USER     DISK READ  DISK WRITE  SWAPIN      IO    COMMAND
+11338 be/4 ldelossa    0.00 B/s    0.00 B/s  0.00 %  0.00 % spotify
+Total DISK READ :       0.00 B/s | Total DISK WRITE :       0.00 B/s
+Actual DISK READ:       0.00 B/s | Actual DISK WRITE:     179.71 K/s
+  TID  PRIO  USER     DISK READ  DISK WRITE  SWAPIN      IO    COMMAND
+11338 be/4 ldelossa    0.00 B/s    0.00 B/s  0.00 %  0.00 % spotify
+
+```
 
 ### blktrace
+disk I/O event tracing
 
 ### MegaCLI
+LSI controller statistics
 
 ### smartctl
+disk controller statistics
