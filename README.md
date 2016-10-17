@@ -1696,10 +1696,152 @@ Actual DISK READ:       0.00 B/s | Actual DISK WRITE:     179.71 K/s
 ```
 
 ### blktrace
-disk I/O event tracing
+disk I/O event tracing. We use the command btrace
+
+```
+# btrace /dev/sdb
+8,16 3 1 0.429604145 20442 A R 184773879 + 8 <- (8,17) 184773816
+8,16 3 2 0.429604569 20442 Q R 184773879 + 8 [cksum]
+8,16 3 3 0.429606014 20442 G R 184773879 + 8 [cksum]
+8,16 3 4 0.429607624 20442 P N [cksum]
+8,16 3 5 0.429608804 20442 I R 184773879 + 8 [cksum]
+8,16 3 6 0.429610501 20442 U N [cksum] 1
+8,16 3 7 0.429611912 20442 D R 184773879 + 8 [cksum]
+8,16 1 1 0.440227144 0 C R 184773879 + 8 [0]
+
+Columns:
+[device major, device minor] [CPU ID] [Sequence Number] [Action time, in seconds] [Process ID] [Action identifier] [RWBS description]
+
+Action Identifiers (use -a to filter by actions):
+
+A IO was remapped to a different device
+B IO bounced
+C IO completion
+D IO issued to driver
+F IO front merged with request on queue
+G Get request
+I IO inserted onto request queue
+M IO back merged with request on queue
+P Plug request
+Q IO handled by request queue code
+S Sleep request
+T Unplug due to timeout
+U Unplug request
+X Split
+
+RWBS Description:
+R(read)
+W(write)
+D(block discard)
+B(barrier operation)
+S(synchronous)
+```
 
 ### MegaCLI
 LSI controller statistics
 
 ### smartctl
-disk controller statistics
+disk controller statistics using (SMART)
+
+## Experimentation
+
+### Ad Hoc
+The dd command can be used to perform ad hoc tests of sequential disk performance. For example, testing sequential read with a 1 Mbyte I/O size:
+
+```
+# dd if=/dev/sda1 of=/dev/null bs=1024k count=1k
+1024+0 records in
+1024+0 records out
+1073741824 bytes (1.1 GB) copied, 7.44024 s, 144 MB/s
+```
+
+Sequential write can be tested similarly.
+
+### Custom Load Generators
+You can write short C programs that open the device path and applies the intended workload.
+You can open these device paths with O_DIRECT to avoid buffering.
+
+### hdparm
+*hdparm* can be used as a micro-benchmarking tool.
+
+```
+hdparm -Tt /dev/sda
+
+-T test cached reads
+-t tests disk device reads
+
+/dev/sda:
+Timing cached reads:   20682 MB in  2.00 seconds = 10350.50 MB/sec
+Timing buffered disk reads: 292 MB in  3.00 seconds =  97.33 MB/sec
+```
+
+## Tuning
+
+### Operating system
+
+#### ionice
+Can be used to set an I/O scheduling class and priority for a process. Scheduling classes:
+
+* 0, none: no class specified, so the kernel will pick a default(best effort) with a priority based on the process nice value
+* 1, real-time: highest-priority access to the disk. If misused, this can starve other other processes
+* 2, best effort: default scheduling class, supporting priorities 0-7, with 0 the highest-priority
+* 3, idle: disk I/O allowed only after a grace period of disk idleness
+
+#### Cgroups
+Limits block I/O subsystem operations. Can be in shares or fixed limits.
+
+#### Tunable Parameters
+
+**/sys/block/sda/queue/scheduler**: allows you to select I/O scheduler policy.
+
+# Network Level
+
+## Terminology
+
+<table>
+  <tr>
+    <th>Interface</th>
+    <th>the term interface port refers to the physical network connector. The term interface or link refers to the logical instance of a network interface port, as seen and configured by the OS.</th>
+  </tr>
+  <tr>
+    <td>Packet</td>
+    <td>The term packet typically refers to an IP-level routable message. </td>
+  </tr>
+  <tr>
+    <td>Frame</td>
+    <td>a physical network-level message, for example, an Ethernet frame</td>
+  </tr>
+  <tr>
+    <td>Bandwidth</td>
+    <td>the maximum rate of data transfer from the network type, usually measured in bits per second. "10 GbE" is Ethernet with a bandwidth of 10 Gbits/s</td>
+  </tr>
+  <tr>
+    <td>Throughput</td>
+    <td>the current data transfer rate between the network endpoint, measured in bits per second or bytes per second</td>
+  </tr>
+  <tr>
+    <td>Latency</td>
+    <td>Network latency can refer to the time it takes for a message to make a round trip between endpoints, or the time required to establish a connection (e.g. TCP handshake), excluding the data transfer time that follows. </td>
+  </tr>
+</table>
+
+## Models
+
+### Network Interface
+Network interfaces are mapped to physical network ports as part of their configuration. Ports connect to the network and typically have separate transmit and receive channels.
+
+![image alt text](image_network_network_interface.png)
+
+### Controller
+A *network interface card* (NIC) provides one or more network ports for the system and houses a *network controller*: a microprocessor for transferring packets between the ports and the system I/O transport.
+
+![image alt text](image_network_controller.png)
+
+### Protocol Stack
+Networking is accomplished by a stack of protocols, each layer of which servers a particular purpose.
+
+![image alt text](image_network_protocol_stack.png)
+
+Sent messages move down the stack from the application to the physical network. Received messages move up. Wider levels indicate protocol encapsulation.
+
+##
