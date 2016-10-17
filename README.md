@@ -177,7 +177,58 @@
 		- [Network Interface](#network-interface)
 		- [Controller](#controller)
 		- [Protocol Stack](#protocol-stack)
-	- [](#)
+	- [Concepts](#concepts)
+		- [Latency](#latency)
+			- [Name resolution latency](#name-resolution-latency)
+			- [Ping Latency](#ping-latency)
+			- [Connection Latency](#connection-latency)
+			- [First-Byte Latency](#first-byte-latency)
+			- [Connection life span](#connection-life-span)
+		- [Buffering](#buffering)
+		- [Connection backlog](#connection-backlog)
+		- [Utilization](#utilization)
+		- [Local Connections](#local-connections)
+	- [Architecture](#architecture)
+		- [protocols](#protocols)
+			- [TCP](#tcp)
+				- [Sliding window](#sliding-window)
+				- [Congestion avoidance](#congestion-avoidance)
+				- [Slow-start](#slow-start)
+				- [Selective Acknowledgments (SACKs)](#selective-acknowledgments-sacks)
+				- [Fast retransmit](#fast-retransmit)
+				- [Fast recovery](#fast-recovery)
+				- [Three way handshake](#three-way-handshake)
+				- [Duplicate ACK detection](#duplicate-ack-detection)
+				- [Congestion Control: Reno and Tahoe](#congestion-control-reno-and-tahoe)
+				- [Nagle](#nagle)
+				- [Delayed ACKs](#delayed-acks)
+				- [SACK and FACK](#sack-and-fack)
+			- [UDP](#udp)
+	- [Software](#software)
+		- [Network Stack](#network-stack)
+			- [Techniques for high packet throughput](#techniques-for-high-packet-throughput)
+			- [TCP](#tcp)
+	- [Methodology](#methodology)
+		- [Tools Methodology](#tools-methodology)
+		- [USE Methodology](#use-methodology)
+		- [Workload characterization](#workload-characterization)
+		- [Advanced Workload Characterization](#advanced-workload-characterization)
+		- [Latency Analysis](#latency-analysis)
+		- [TCP analysis](#tcp-analysis)
+			- [Ephemeral Port Exhaustion](#ephemeral-port-exhaustion)
+	- [Analysis](#analysis)
+		- [netstat](#netstat)
+		- [sar](#sar)
+		- [ifconfig](#ifconfig)
+		- [ip](#ip)
+		- [nicstat](#nicstat)
+		- [ping](#ping)
+		- [traceroute](#traceroute)
+		- [pathchar](#pathchar)
+		- [tcpdump](#tcpdump)
+		- [Wireshark](#wireshark)
+		- [Dtrace, perf](#dtrace-perf)
+	- [TODO: Tuning](#todo-tuning)
 
 <!-- /TOC -->
 
@@ -1862,4 +1913,370 @@ Networking is accomplished by a stack of protocols, each layer of which servers 
 
 Sent messages move down the stack from the application to the physical network. Received messages move up. Wider levels indicate protocol encapsulation.
 
-##
+## Concepts
+
+### Latency
+Can be measured in different ways: *name resolution latency, ping latency, connection latency, first-byte latency, round-trip time, and connection life span.*
+
+#### Name resolution latency
+Host name to IP resolution via DNS. Time this takes is *Name resolution latency*
+
+#### Ping Latency
+Uses ICMP echo request and echo response to measure latency. Can be used to measure network latency between hosts, including hops in between. Ping latency expectations
+
+![image alt text](image_network_ping_latency.png)
+
+Sending side of icmp has slightly more overhead due to timestampes being measured from user-land, such that kernel context switching and kernel code path time are included.
+
+#### Connection Latency  
+Time to establish a network connection, before any data is transfered. For TCP this is the *TCP handshake time*. Time from the client sending a SYN to receiving the corresponding SYN-ACK.
+
+Similar to ping latency, but more kernel code is executed along with taking time to retransmit any dropped packets. If server's SYN backlog is full, the server can drop the SYN. The client then attempts to retransmit the SYN.
+
+Followed by *first-byte latency*
+
+#### First-Byte Latency
+AKA *time to first byte*. From client's perspective, the time until the first byte is received from the server. This includes connection establishment to server, processing time of the server, and network latency between both nodes. This is a good indication of server performance from  clients perspective.
+
+#### Connection life span
+Connection life span is the time from when a network connection is established to when it is closed.
+
+### Buffering
+
+Allows network throughput to be sustained at high rates despite various network latencies that may occur. Buffers can be used on both sender and receiver sides. Larger buffers can mitigate the effects of higher round-trip times by continuing to send data before blocking and waiting for an acknowledgment.
+
+*buffer bloat* packets are queued for long intervals. Triggers TCP Congestion Avoidance on the hosts, which throttles performance. Mitigation in the linux kernel has been introduced (byte queue limits, CoDel queue management, TCP small queues).
+
+Buffering should be done at the end points, and not the intermediate network nodes. Principle called *end-to-end arguments*
+
+### Connection backlog
+
+Another type of buffering for initial connection requests. TCP implements a backlog, where SYN requests can queue in the kernel before being accepted by the user-land process. Once backlog limit is reached, server will begin to drop new SYN packets.
+
+Measuring backlog drops measure network connection saturation.
+
+### Utilization
+
+Calculated as the current throughput over the maximum bandwidth.
+
+Full duplex, utilization applies to each direction and is measured as the current throughput for that direction over the current negotiated bandwidth.
+
+Once a network interface direction reaches 100% utilization, it becomes a bottleneck, limiting performance
+
+### Local Connections
+Network connections between two applications on the same host use the virtual network interface: *loopback*
+
+Connecting via IP to localhost is the IP sockets technique of inter-process communication. Unix sockets are available also, skipping the overhead of TCP for local socket connections.
+
+For TCP/IP sockets, the kernel may detect the localhost connection after the handshake, and then shortcut the TCP/IP stack for data transfers, improving performance.
+
+## Architecture
+
+### protocols
+
+#### TCP
+TCP can provide a high rate of throughput even on a high-latency network. This is accomplished via buffering and *sliding window*.  Congestion control exists along with a *congestion window* set by the sender to maintain a high but also appropriate rate of transmission across different and varying networks.
+
+##### Sliding window
+This allows multiple packets up to the size of the window to be sent on the network before acknowledgements are received, providing high throughput even on high-latency networks. Size of the window is advertised by receiver to indicate how many packets it is willing to receive at a time.
+
+##### Congestion avoidance
+To prevent sending too much data and causing saturation, which can cause packet drops and worse performance
+
+##### Slow-start
+Part of TCP congestion control, this begins with a small congestion window and then increases it as acknowledgments (ACKs) are received within a certain time. When they are not, the congestion window is reduced.
+
+##### Selective Acknowledgments (SACKs)
+allow TCP to acknowledge discontinuous packets, reducing the number of retransmits required
+
+##### Fast retransmit
+Instead of waiting on a timer, TCP can retransmit dropped packets based on the arrival of duplicate ACKs. These are a function of round-trip time and not the typically much slower timer.
+
+##### Fast recovery
+This recovers TCP performance after detecting duplicate ACKs, by resetting the connection to perform slow-stary
+
+##### Three way handshake
+
+![image alt text](image_network_threewayhandshake.png)
+
+##### Duplicate ACK detection
+Used by fast retransmit and fast recovery.
+
+1. The sender sends a packet with sequent number 10.
+2. The receiver replies with an ACK for sequence number 11.
+3. The sender sends 11, 12, and 13.
+4. Packet 11 is dropped
+5. The receiver replies to both 12 and 13 by sending an ACK for 11, which it is still expecting.
+6. The sender receives the duplicate 11 ACKs.
+
+##### Congestion Control: Reno and Tahoe
+
+**Reno**: Triple duplicate ACKs trigger: halving the congestion window, halving o the slow start threshold, fast retransmit, and fast recovery
+
+**Taho**: Tripe duplicate ACKs trigger: fast retransmit, halving the slow-start threshold, congestion window set to one maximum segment size (MSS), and slow-start State
+
+Other algos: **Vegas**, **New Reno**, and **Hybla**
+
+##### Nagle
+Reduces the number of small packets on a network by delaying their transmission to allow more data to arrive and coalesce. This delays packets only if there is data in the pipeline and delays are already being encountered. Can cause issues with delayed ACKs
+
+##### Delayed ACKs
+This algorithm delays snding of ACKs up to 500ms, so that multiple ACKs may be combined.
+
+##### SACK and FACK
+TCP Selective acknowledgment (SACK) algorithm allows the receiver to inform the sender that it received a noncontiguous block of data. Without this, a packet drop would eventually cause the entire send  window to be retransmitted, to preserve a sequential acknowledgement scheme. This harms TCP peformance and is avoided by most modern operating systems that support SACK.
+
+SACK has been extended by forward acknowledgments (FACK), which are supported in Linux be default. FACKs track additional state and better regulate the amount of outstanding data in the network improving overall performance.
+
+#### UDP
+
+Messages in UDP are called *datagrams*
+
+UDP Provides:
+
+**Simplicity**: Simple and small protocol headers reduce overheads of computation and size
+**Statelessness**: lower overheads for connections and retransmission.
+**No retransmits**: These add significant latencies for TCP connections.
+
+## Software
+
+Includes **Network Stack**, **TCP**, and **device drivers**.
+
+### Network Stack
+
+![image alt text](image_network_network_stack.png)
+
+This stack is multithreaded, and inbound packets can be processed by multiple CPUs.
+
+* **Mapping of an inbound packet to a CPU**
+  * Based on a hash of th source IP address, to evenly spread out load
+	* Based on the CPU where the socket was most recently processed, to benefit from CPU cache warmth and memory locality.
+
+TCP, IP and generic net driver software are core kernel components with device drivers as additional modules. Packets are passed through these kernel components as the struct *sk_buff* data type.
+
+![image alt text](image_network_driver_stack.png)
+
+#### Techniques for high packet throughput
+
+* **RSS: Receive Side Scaling**: for modern NICs that support multiple queues and can hash packets to different queues, which are in turn processed by different CPUs by interrupting them directly. This hash may be based on the IP addres and the TCP port numbers, so that packets from th same connection end up being processed by the same CPU.
+
+* **RPS: Receive Packet Steering**: a software implementation of RSS, for NICs that do not support mulitple queues. This involves a short interrupt service routine to map the inbound packet to a CPU for processing. A similar hash can be used to map packets to CPUs, based on fields from the packet headers.
+
+* **RFS: Receive Flow Steering**: This is similar to RPS, but with affinity for where th socket was las processed on-CPU, to improve CPU cache hit rates and memory locality.
+
+* **Accelerated Receive Flow Steering**: This achieves RFS in hardware, for NICs that support this functionality. It involves updating the NIC with flow information so that it can determine which CPU to interrupt.
+
+* **XPS: Transmit Packet Steering**: For NICs with multiple transmit queues, this supports transmission by multiple CPUs to the quues.
+
+#### TCP
+
+Bursts of connections are handled by using backlog queues. Two such queues, one for incomplete connections while the TCP handshake completes (also known as the SYN backlog), and one for established connections waiting to be accepted by the application (also known as the listen backlog)
+
+![image alt text](image_network_backlog_queues.png)
+
+Data throughput is improved by using send and receive buffers associated with the socket.
+
+![image alt text](image_network_sr_buffers.png)
+
+In the write path, the data is bufferd in the TCP send buffer, and then sent to IP for delivery. While the IP protcol has the capability to fragment packets, TCP tries to avoid this by sending data as MSS size segments to IP. This means unit of (re-)transmission matches the unit of fargmentation; otherwise a dropped fragment would require retransmission of the entire prefragmented packet.
+
+TCP SEND and RECEIVE buffers are tunable. Larger buffers can increase throughput.
+
+## Methodology
+
+### Tools Methodology
+
+**netstat -s**: Look for a high rate of retransmits and out-of-order packets. What constitutes a "high" retransmit rate depends on the client: an Internet-facing system with unreliable remote clients should have a higher retransmit rate than an internal system with clients in the same data center.
+
+**netstat -i**: Check interface error counters
+
+**ifconfig**: check "errors", "dropped", "overruns"
+
+**Throughput**: Check the rate of bytes transmitted and received *ip* command on linux. High throughput may hit line rate for negotiated speed and be limited. It could also cause contention and delays between network users on the system.
+
+**tcpdump/snoop**: Dumps packet and operation information. Good way to quickly trace traffic, but CPU intensive
+
+### USE Methodology
+
+ **Utilization**: Time the interface was busy sending or receiving frames. Can be calculated as the current throughput divided by the current negotiated speed. Current throughput should be measured as bytes per second on the network, including all protocol headers.
+ **Saturation**: The degree of extra queueing, buffering, or blocking due to a fully utilized interface.
+ **Errors**: for receive: bad checksum, frame too short(less than the data link header) or too long, collisions; for transmit: late collisions (bad wiring)
+
+### Workload characterization
+
+**Network interface throughput**: RX and TX, bytes per second
+**Network interface IOPs**: RX and TX, frames per second
+**TCP connection rate**: active and passive, connections per second
+
+Example workload description:
+
+*The network throughput varies based on users and performs more writes (TX) than reads (RX). The peak write rate is 200 Mbytes/s and 210,000 packets/s, and the peak read is 10 Mbyte/s with 70,000 packets/s. The inbound (passive) TCP connection rate reaches 3,000 connections/s*
+
+### Advanced Workload Characterization
+
+What is the average packet size? RX, TX?
+What is the protocol breakdown? TCP versus UDP?
+What TCP/UDP ports are active? Bytes per second, connections per second?
+Which processes are actively using the network?
+
+### Latency Analysis
+
+* **System call send/receive latency**: time for the socket read/write calls
+* **System call connect latency**: for connection establishment; note that some applications perform this as a non-blocking syscall.
+* **TCP connection initialization time**: Time for the three-way handshake
+* **TCP first-byte latency**: Time between the connection establishment and receiving the fist data bytes
+* **TCP connection duration**: time from established to closed
+**Network round-trip time**: time for a packet to travel from client to server and back
+* **TCP retransmits**: if present, can add thousands of milliseconds of latency to network I/O
+* **Interrupt latency**: Time from a network controller interrupt for a received packet to when it is serviced by the kernel.
+* **Inter-stack latency**: Time for a packet to move through the kernel TCP/IP stack
+
+### TCP analysis
+
+* Usage of TCP send/receive buffers
+* Usage of TCP backlog queues
+* Kernel drops due to the backlog queue being full
+* Congestion window size, including zero-size advertisements
+* SYNs received during a TCP TIME-WAIT interval
+
+#### Ephemeral Port Exhaustion
+The last behavior can become a scalability problem when a server is connecting frequently to another on the same destination port, using the same source and destination IP addresses. The only distinguishing factor for each connection is the client source port—the ephemeral port—which for TCP is a 16-bit value and may be further constrained by operating system parameters (minimum and maximum). Combined with the TCP TIME-WAIT interval, which may be 60 s, a high rate of connections (more than 65,536 during 60 s) can encounter a clash for new connections. In this scenario, a SYN is sent while that ephemeral port is still associated with a previous TCP session that is in TIMEWAIT, and the new SYN may be rejected if it is misidentified as part of the old connection (a collision). To avoid this issue, the Linux kernel attempts to reuse or recycle connections quickly (which usually works well).
+
+## Analysis
+
+### netstat
+various network stack and interface statistics
+
+```
+-a lists information for all sockets
+-s network stack statistics
+-i network interface statistics
+-r lists th route table
+-n no name resolution
+-v verbose
+
+netstat -i
+
+Kernel Interface table
+Iface   MTU Met   RX-OK RX-ERR RX-DRP RX-OVR    TX-OK TX-ERR TX-DRP TX-OVR Flg
+enp0s25    1500 0         0      0      0 0             0      0      0      0 BMU
+lo        65536 0    212804      0      0 0        212804      0      0      0 LRU
+wlp3s0     1500 0   5432116      0      0 0       1343351      0      0      0 BMRU
+
+Columns: [interface] [MTU] [RX-*] [TX-*]
+
+OK: packet transferred successfully
+ERR: packet errors
+DRP: packet drops
+OVR: packet overruns
+
+Drops and overruns are indication of network interface saturation.
+
+```
+
+For -s option look for:
+* A high rate of forwarded versues total packets received: check that the server is supposed to be forwarding (routing) packets.
+* Passive connection openings: this can be monitored to show load in terms of client connections
+* A high rate of segments retransmitted versus segments sent out: can show an unreliable network. This may be expected (internet clients)
+* Packets pruned from the receive queue because of socket buffer overrun: This is a sign of network saturation and may be fixable by increasing socket buffers -- providing there are sufficient system resources for the application to keep up.
+
+### sar
+historical statistics
+```
+-n DEV: network interface statistics
+-n EDEV: network interface errors
+-n IP: IP datagram statistics
+-n EIP: IP error statistics
+-n TCP: TCP statistics
+-n ETCP: TCP error statistics
+
+```
+![image alt text](image_network_sar.png)
+
+### ifconfig
+interface configuration, now replaced by ip
+
+```
+txqueuelen: length of the transmit queue for the interfaces.
+```
+
+### ip
+network interface statistics
+
+```
+ip -s link
+
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN mode DEFAULT group default qlen 1
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    RX: bytes  packets  errors  dropped overrun mcast   
+    17742089   213026   0       0       0       0       
+    TX: bytes  packets  errors  dropped carrier collsns
+    17742089   213026   0       0       0       0       
+2: enp0s25: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc pfifo_fast state DOWN mode DEFAULT group default qlen 1000
+    link/ether 54:ee:75:2e:e7:19 brd ff:ff:ff:ff:ff:ff
+    RX: bytes  packets  errors  dropped overrun mcast   
+    0          0        0       0       0       0       
+    TX: bytes  packets  errors  dropped carrier collsns
+    0          0        0       0       0       0       
+3: wlp3s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP mode DORMANT group default qlen 1000
+    link/ether 7c:7a:91:1a:b2:79 brd ff:ff:ff:ff:ff:ff
+    RX: bytes  packets  errors  dropped overrun mcast   
+    7483166775 5436573  0       0       0       0       
+    TX: bytes  packets  errors  dropped carrier collsns
+    223562920  1346384  0       0       0       0     
+```
+
+### nicstat
+network interface throughput and utilization
+
+```
+nicstat -z 1
+    Time      Int   rKB/s   wKB/s   rPk/s   wPk/s    rAvs    wAvs %Util    Sat
+19:33:38   wlp3s0   46.73    1.40   34.76    8.61  1376.4   166.0  0.00   0.00
+19:33:38       lo    0.11    0.11    1.36    1.36   83.29   83.29  0.00   0.00
+    Time      Int   rKB/s   wKB/s   rPk/s   wPk/s    rAvs    wAvs %Util    Sat
+19:33:39   wlp3s0    0.18    0.30    1.00    2.00   181.0   151.5  0.00   0.00
+    Time      Int   rKB/s   wKB/s   rPk/s   wPk/s    rAvs    wAvs %Util    Sat
+19:33:40   wlp3s0    0.21    0.00    1.00    0.00   215.0    0.00  0.00   0.00
+    Time      Int   rKB/s   wKB/s   rPk/s   wPk/s    rAvs    wAvs %Util    Sat
+19:33:41   wlp3s0    0.52    0.83    8.00    9.00   66.00   94.00  0.00   0.00
+
+%Util: maximum utilization
+Sat: value reflecting interface saturation statistics
+Kb/s (r or w): kilobytes per second
+Pk/s (r or w): packets per second
+Avs/s (r or w): average packet size, bytes
+```
+
+### ping
+test network connectivity
+
+```
+PING www.google.com (172.217.2.4) 56(84) bytes of data.
+64 bytes from lga15s45-in-f4.1e100.net (172.217.2.4): icmp_seq=1 ttl=55 time=25.1 ms
+64 bytes from lga15s45-in-f4.1e100.net (172.217.2.4): icmp_seq=2 ttl=55 time=37.9 ms
+64 bytes from lga15s45-in-f4.1e100.net (172.217.2.4): icmp_seq=3 ttl=55 time=23.8 ms
+^C
+--- www.google.com ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2001ms
+rtt min/avg/max/mdev = 23.885/29.013/37.963/6.353 ms
+
+rrt: rount rip time
+```
+
+### traceroute
+test network routes
+
+### pathchar
+determine network path characteristics
+
+### tcpdump
+network packet sniffer
+
+### Wireshark
+graphical network packet inspection
+
+### Dtrace, perf
+TCP/IP stack tracing: connections, packets, drops, latency
+
+## TODO: Tuning
