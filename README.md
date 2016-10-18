@@ -158,12 +158,10 @@
 		- [sar](#sar)
 		- [pidstat,iotop](#pidstatiotop)
 		- [blktrace](#blktrace)
-- [btrace /dev/sdb](#btrace-devsdb)
 		- [MegaCLI](#megacli)
 		- [smartctl](#smartctl)
 	- [Experimentation](#experimentation)
 		- [Ad Hoc](#ad-hoc)
-- [dd if=/dev/sda1 of=/dev/null bs=1024k count=1k](#dd-ifdevsda1-ofdevnull-bs1024k-count1k)
 		- [Custom Load Generators](#custom-load-generators)
 		- [hdparm](#hdparm)
 	- [Tuning](#tuning)
@@ -228,7 +226,14 @@
 		- [tcpdump](#tcpdump)
 		- [Wireshark](#wireshark)
 		- [Dtrace, perf](#dtrace-perf)
-	- [TODO: Tuning](#todo-tuning)
+	- [Tuning](#tuning)
+		- [Socket and TCP Buffers](#socket-and-tcp-buffers)
+		- [TCP Backlog](#tcp-backlog)
+		- [Device backlog](#device-backlog)
+		- [TCP Congestion Controls](#tcp-congestion-controls)
+		- [TCP options](#tcp-options)
+		- [Network Interface](#network-interface)
+- [Cloud Level](#cloud-level)
 
 <!-- /TOC -->
 
@@ -1768,7 +1773,7 @@ Actual DISK READ:       0.00 B/s | Actual DISK WRITE:     179.71 K/s
 disk I/O event tracing. We use the command btrace
 
 ```
-# btrace /dev/sdb
+btrace /dev/sdb
 8,16 3 1 0.429604145 20442 A R 184773879 + 8 <- (8,17) 184773816
 8,16 3 2 0.429604569 20442 Q R 184773879 + 8 [cksum]
 8,16 3 3 0.429606014 20442 G R 184773879 + 8 [cksum]
@@ -1818,7 +1823,7 @@ disk controller statistics using (SMART)
 The dd command can be used to perform ad hoc tests of sequential disk performance. For example, testing sequential read with a 1 Mbyte I/O size:
 
 ```
-# dd if=/dev/sda1 of=/dev/null bs=1024k count=1k
+dd if=/dev/sda1 of=/dev/null bs=1024k count=1k
 1024+0 records in
 1024+0 records out
 1073741824 bytes (1.1 GB) copied, 7.44024 s, 144 MB/s
@@ -2279,4 +2284,92 @@ graphical network packet inspection
 ### Dtrace, perf
 TCP/IP stack tracing: connections, packets, drops, latency
 
-## TODO: Tuning
+## Tuning
+
+### Socket and TCP Buffers
+The maximum socket buffer size for all protocol types, for both reads(rmem_max) and writes (wmem_max)
+
+```
+net.core.rmem_max = 16777216
+net.core.wmem_max = 16777216
+```
+
+The value is in bytes. This may need to be set to 16Mbytes or higher to support full-speed 10 Gbe connections.
+
+Enabling autotuning of the TCP receive buffer:
+```
+tcp_moderate_rcvbuf = 1
+```
+
+Setting the auto-tuning parameters for the TCP read and write buffers:
+```
+net.ipv4.tcp_rmem = 4096 87380 16777216
+net.ipv4.tcp_wmem = 4096 65536 16777216
+```
+
+Each has three values: the minimum, default, and maximm number of bytes to use. The size used is autotuned from the default. to improve TCP throughput, try increasing the maximum value. Increasing minimum and default will consume more memory preconnection, which may not be necessary.
+
+### TCP Backlog
+First backlog queue, for half-open connections:
+```
+tcp_max_syn_backlog = 4096
+```
+
+Second backlog queue, the listen backlog, for passing connections to accept():
+```
+net.core.somaxconn = 1024
+```
+
+Both of these may need to be increased from their defaults, for example, to 4,096 and 1024 or higher to better handle bursts of load.
+
+### Device backlog
+Increasing the length of the network device backlog queue, per CPU:
+```
+net.core.netdev_max_backlog = 10000
+```
+This may need to be increased, such as to 10,000 for 10 Gbe NICs.
+
+### TCP Congestion Controls
+Linux supports pluggable congestion control algorithms. Listing those currently available:
+
+```
+sysctl net.ipv4.tcp_available_congestion_control
+net.ipv4.tcp_available_congestion_control = cubic reno
+```
+
+Some may be available but not currently loaded.
+
+```
+modprobe tcp_htcp
+sysctl net.ipv4.tcp_available_congestion_control
+net.ipv4.tcp_available_congestion_control = cubic reno htcp
+```
+
+Selecting algorithm
+
+```
+net.ipv4.tcp_congestion_control = cubic
+```
+
+### TCP options
+```
+net.ipv4.tcp_sack = 1
+net.ipv4.tcp_fack = 1
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_tw_recycle = 0
+```
+
+SACK and FACK extensions may improve throughput performance over high-latency networks, at a cost of some CPU.
+
+*tcp_tw_reuse* allows a TIME-WAIT session to be reused when it appears safe to do so.
+*tcp_tw_recycle* another way to reuse TIME-WAIT sessions, although not as safe.
+
+### Network Interface
+
+The TX queue length may be increased using ifconfig
+
+```
+ifconfig eth0 txqueuelen 10000
+```
+
+# Cloud Level
